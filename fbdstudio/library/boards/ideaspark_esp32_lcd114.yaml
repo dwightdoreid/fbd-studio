@@ -1,0 +1,47 @@
+id: ideaspark_esp32_lcd114
+title: ideaspark ESP32 + 1.14" LCD
+description: >-
+  ideaspark ESP32-WROOM-32 board (CH340) with a built-in 1.14" ST7789 135x240
+  colour LCD on SPI: MOSI GPIO23, SCLK GPIO18, CS GPIO15, DC GPIO2, RST GPIO4,
+  backlight GPIO32. Use the TFT block for the display; its pins are filled in.
+platformio:
+  platform: espressif32
+  board: esp32dev
+  framework: arduino
+adc_max: 4095
+# GPIO1/3 (UART0, used for monitoring) and GPIO6-11 (internal flash) are left out on purpose.
+# Capabilities: DI digital input, DO digital output, AI analog input, PWM output,
+# I2C / SPI bus pins (the ESP32 can route both buses to any output-capable pin).
+features: [i2c, spi, wifi, bt_classic, ble]
+pin_defaults: {sda: GPIO21, scl: GPIO22, sck: GPIO18, miso: GPIO19, mosi: GPIO23,
+               tft_cs: GPIO15, tft_dc: GPIO2, tft_rst: GPIO4, tft_bl: GPIO32}
+restrictions:
+  - feature: wifi
+    capability: AI
+    pins: [GPIO0, GPIO2, GPIO4, GPIO12, GPIO13, GPIO14, GPIO15, GPIO25, GPIO26, GPIO27]
+    message: "is an ADC2 pin: analog inputs on ADC2 do not work while WiFi is used. Use GPIO32-39 (ADC1)."
+pins:
+  - {id: "GPIO2", c: "2", caps: [DI, DO, AI, PWM, I2C, SPI], note: "Built-in LCD: DC. Using it for something else disturbs the display. Boot strapping pin.", warn: true}
+  - {id: "GPIO4", c: "4", caps: [DI, DO, AI, PWM, I2C, SPI], note: "Built-in LCD: RST. Using it for something else resets the display.", warn: true}
+  - {id: "GPIO5",  c: "5",  caps: [DI, DO, PWM, I2C, SPI], note: "Boot strapping pin: must be HIGH at boot.", warn: true}
+  - {id: "GPIO12", c: "12", caps: [DI, DO, AI, PWM, I2C, SPI], note: "Boot strapping pin: must be LOW at boot (ADC2).", warn: true}
+  - {id: "GPIO13", c: "13", caps: [DI, DO, AI, PWM, I2C, SPI], note: "ADC2"}
+  - {id: "GPIO14", c: "14", caps: [DI, DO, AI, PWM, I2C, SPI], note: "ADC2"}
+  - {id: "GPIO15", c: "15", caps: [DI, DO, AI, PWM, I2C, SPI], note: "Built-in LCD: CS. Boot strapping pin.", warn: true}
+  - {id: "GPIO16", c: "16", caps: [DI, DO, PWM, I2C, SPI]}
+  - {id: "GPIO17", c: "17", caps: [DI, DO, PWM, I2C, SPI]}
+  - {id: "GPIO18", c: "18", caps: [DI, DO, PWM, I2C, SPI], note: "SPI SCK, shared with the built-in LCD (other SPI devices may share it)."}
+  - {id: "GPIO19", c: "19", caps: [DI, DO, PWM, I2C, SPI], note: "Default SPI MISO."}
+  - {id: "GPIO21", c: "21", caps: [DI, DO, PWM, I2C, SPI], note: "Default I2C SDA."}
+  - {id: "GPIO22", c: "22", caps: [DI, DO, PWM, I2C, SPI], note: "Default I2C SCL."}
+  - {id: "GPIO23", c: "23", caps: [DI, DO, PWM, I2C, SPI], note: "SPI MOSI, shared with the built-in LCD (other SPI devices may share it)."}
+  - {id: "GPIO25", c: "25", caps: [DI, DO, AI, PWM, I2C, SPI], note: "ADC2, DAC1"}
+  - {id: "GPIO26", c: "26", caps: [DI, DO, AI, PWM, I2C, SPI], note: "ADC2, DAC2"}
+  - {id: "GPIO27", c: "27", caps: [DI, DO, AI, PWM, I2C, SPI], note: "ADC2"}
+  - {id: "GPIO32", c: "32", caps: [DI, DO, AI, PWM, I2C, SPI], note: "Built-in LCD: backlight.", warn: true}
+  - {id: "GPIO33", c: "33", caps: [DI, DO, AI, PWM, I2C, SPI], note: "ADC1"}
+  - {id: "GPIO34", c: "34", caps: [DI, AI], note: "Input only, no internal pull-up/down (ADC1).", warn: true}
+  - {id: "GPIO35", c: "35", caps: [DI, AI], note: "Input only, no internal pull-up/down (ADC1).", warn: true}
+  - {id: "GPIO36", c: "36", caps: [DI, AI], note: "VP. Input only, no internal pull-up/down (ADC1).", warn: true}
+  - {id: "GPIO39", c: "39", caps: [DI, AI], note: "VN. Input only, no internal pull-up/down (ADC1).", warn: true}
+  - {id: "GPIO0",  c: "0",  caps: [DI, DO, AI, PWM, I2C, SPI], note: "BOOT button. Strapping pin: LOW at reset enters download mode.", warn: true}

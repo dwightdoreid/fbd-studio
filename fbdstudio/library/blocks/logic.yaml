@@ -1,0 +1,104 @@
+blocks:
+  - type: AND
+    category: Bit logic
+    title: Logical AND
+    description: OUT is TRUE when all inputs are TRUE. Right-click / properties to add inputs.
+    inputs:
+      - {name: IN, type: BOOL, default: TRUE, variadic: {min: 2, max: 16, default: 2}}
+    outputs:
+      - {name: OUT, type: BOOL}
+    cycle: |
+      bool r = true;
+      for (uint8_t i = 0; i < IN_n; i++) r = r && IN[i];
+      OUT = r;
+
+  - type: OR
+    category: Bit logic
+    title: Logical OR
+    description: OUT is TRUE when at least one input is TRUE.
+    inputs:
+      - {name: IN, type: BOOL, default: FALSE, variadic: {min: 2, max: 16, default: 2}}
+    outputs:
+      - {name: OUT, type: BOOL}
+    cycle: |
+      bool r = false;
+      for (uint8_t i = 0; i < IN_n; i++) r = r || IN[i];
+      OUT = r;
+
+  - type: XOR
+    category: Bit logic
+    title: Exclusive OR
+    description: OUT is TRUE when an odd number of inputs are TRUE.
+    inputs:
+      - {name: IN, type: BOOL, default: FALSE, variadic: {min: 2, max: 16, default: 2}}
+    outputs:
+      - {name: OUT, type: BOOL}
+    cycle: |
+      bool r = false;
+      for (uint8_t i = 0; i < IN_n; i++) r = (r != IN[i]);
+      OUT = r;
+
+  - type: NOT
+    category: Bit logic
+    title: Logical NOT
+    description: OUT is the inverse of IN.
+    inputs:
+      - {name: IN, type: BOOL}
+    outputs:
+      - {name: OUT, type: BOOL}
+    cycle: |
+      OUT = !IN;
+
+  - type: SR
+    category: Bistables
+    title: Set-dominant latch
+    description: Q1 is set by S1 and reset by R. If both are TRUE, S1 wins (set dominant).
+    inputs:
+      - {name: S1, type: BOOL}
+      - {name: R, type: BOOL}
+    outputs:
+      - {name: Q1, type: BOOL}
+    cycle: |
+      Q1 = S1 || (!R && Q1);
+
+  - type: RS
+    category: Bistables
+    title: Reset-dominant latch
+    description: Q1 is set by S and reset by R1. If both are TRUE, R1 wins (reset dominant).
+    inputs:
+      - {name: S, type: BOOL}
+      - {name: R1, type: BOOL}
+    outputs:
+      - {name: Q1, type: BOOL}
+    cycle: |
+      Q1 = !R1 && (S || Q1);
+
+  - type: R_TRIG
+    category: Edge detection
+    title: Rising edge
+    description: Q is TRUE for one scan cycle when CLK changes from FALSE to TRUE.
+    inputs:
+      - {name: CLK, type: BOOL}
+    outputs:
+      - {name: Q, type: BOOL}
+    vars:
+      - {name: M, type: BOOL, init: FALSE}
+    cycle: |
+      Q = CLK && !M;
+      M = CLK;
+
+  - type: F_TRIG
+    category: Edge detection
+    title: Falling edge
+    description: >
+      Q is TRUE for one scan cycle when CLK changes from TRUE to FALSE.
+      (Unlike some PLCs, no pulse is produced on the very first scan.)
+    inputs:
+      - {name: CLK, type: BOOL}
+    outputs:
+      - {name: Q, type: BOOL}
+    vars:
+      - {name: M, type: BOOL, init: FALSE}
+    cycle: |
+      Q = !CLK && M;
+      M = CLK;

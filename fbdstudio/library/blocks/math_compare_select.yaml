@@ -1,0 +1,283 @@
+blocks:
+  # ------------------------------------------------------------ comparison
+  - type: GT
+    category: Comparison
+    title: Greater than
+    description: OUT = IN1 > IN2
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = IN1 > IN2;
+
+  - type: GE
+    category: Comparison
+    title: Greater or equal
+    description: OUT = IN1 >= IN2
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = IN1 >= IN2;
+
+  - type: EQ
+    category: Comparison
+    title: Equal
+    description: OUT = IN1 == IN2 (avoid on REAL values; use a tolerance instead)
+    type_params: {T: {allowed: ANY, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = IN1 == IN2;
+
+  - type: NE
+    category: Comparison
+    title: Not equal
+    description: OUT = IN1 != IN2
+    type_params: {T: {allowed: ANY, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = IN1 != IN2;
+
+  - type: LE
+    category: Comparison
+    title: Less or equal
+    description: OUT = IN1 <= IN2
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = IN1 <= IN2;
+
+  - type: LT
+    category: Comparison
+    title: Less than
+    description: OUT = IN1 < IN2
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = IN1 < IN2;
+
+  # ------------------------------------------------------------ arithmetic
+  - type: ADD
+    category: Arithmetic
+    title: Addition
+    description: OUT = IN1 + IN2 + ...
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs:
+      - {name: IN, type: T, default: 0, variadic: {min: 2, max: 16, default: 2}}
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      T r = 0;
+      for (uint8_t i = 0; i < IN_n; i++) r = r + IN[i];
+      OUT = r;
+
+  - type: SUB
+    category: Arithmetic
+    title: Subtraction
+    description: OUT = IN1 - IN2
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = IN1 - IN2;
+
+  - type: MUL
+    category: Arithmetic
+    title: Multiplication
+    description: OUT = IN1 * IN2 * ...
+    type_params: {T: {allowed: ANY_NUM, default: INT}}
+    inputs:
+      - {name: IN, type: T, default: 1, variadic: {min: 2, max: 16, default: 2}}
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      T r = 1;
+      for (uint8_t i = 0; i < IN_n; i++) r = r * IN[i];
+      OUT = r;
+
+  - type: DIV
+    category: Arithmetic
+    title: Division
+    description: OUT = IN1 / IN2. Division by zero gives 0 (instead of crashing the controller).
+    type_params: {T: {allowed: ANY_NUM, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T, default: 1}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = (IN2 == 0) ? (T)0 : (T)(IN1 / IN2);
+
+  - type: MOD
+    category: Arithmetic
+    title: Modulo
+    description: OUT = IN1 MOD IN2 (remainder). MOD by zero gives 0.
+    type_params: {T: {allowed: ANY_INT, default: INT}}
+    inputs: [{name: IN1, type: T}, {name: IN2, type: T, default: 1}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = (IN2 == 0) ? (T)0 : (T)(IN1 % IN2);
+
+  - type: ABS
+    category: Arithmetic
+    title: Absolute value
+    description: OUT = |IN|
+    type_params: {T: {allowed: ANY_NUM, default: REAL}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = (IN < 0) ? (T)(-IN) : IN;
+
+  - type: SQRT
+    category: Arithmetic
+    title: Square root
+    description: OUT = square root of IN (0 for negative IN)
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = (IN <= 0.0f) ? 0.0f : sqrtf(IN);
+
+  - type: SCALE
+    category: Arithmetic
+    title: Linear scaling
+    description: Maps IN from the range IN_MIN..IN_MAX to OUT_MIN..OUT_MAX (e.g. raw ADC to engineering units). Optionally clamps the result.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: IN_MIN, type: REAL, default: 0}
+      - {name: IN_MAX, type: REAL, default: 4095}
+      - {name: OUT_MIN, type: REAL, default: 0}
+      - {name: OUT_MAX, type: REAL, default: 100}
+    params:
+      - {name: clamp, kind: bool, default: true, description: Limit OUT to OUT_MIN..OUT_MAX}
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      float span = IN_MAX - IN_MIN;
+      float r = (span == 0.0f) ? OUT_MIN : OUT_MIN + (IN - IN_MIN) * (OUT_MAX - OUT_MIN) / span;
+      if (clamp) {
+        float lo = OUT_MIN < OUT_MAX ? OUT_MIN : OUT_MAX;
+        float hi = OUT_MIN < OUT_MAX ? OUT_MAX : OUT_MIN;
+        if (r < lo) r = lo;
+        if (r > hi) r = hi;
+      }
+      OUT = r;
+
+  # ------------------------------------------------------------ selection
+  - type: MOVE
+    category: Selection
+    title: Move / constant
+    description: OUT = IN. With IN unconnected it acts as a constant you can change online.
+    type_params: {T: {allowed: ANY, default: INT}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = IN;
+
+  - type: SEL
+    category: Selection
+    title: Binary selection
+    description: OUT = IN0 when G is FALSE, IN1 when G is TRUE.
+    type_params: {T: {allowed: ANY, default: INT}}
+    inputs: [{name: G, type: BOOL}, {name: IN0, type: T}, {name: IN1, type: T}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = G ? IN1 : IN0;
+
+  - type: MUX
+    category: Selection
+    title: Multiplexer
+    description: OUT = IN<K>. K out of range gives the last input.
+    type_params: {T: {allowed: ANY, default: INT}}
+    inputs:
+      - {name: K, type: INT}
+      - {name: IN, type: T, variadic: {min: 2, max: 16, default: 2, start: 0}}
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      int k = K < 0 ? 0 : (K >= IN_n ? IN_n - 1 : K);
+      OUT = IN[k];
+
+  - type: LIMIT
+    category: Selection
+    title: Limiter
+    description: OUT = IN clamped to the range MN..MX.
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs: [{name: MN, type: T}, {name: IN, type: T}, {name: MX, type: T, default: 100}]
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      OUT = (IN < MN) ? MN : ((IN > MX) ? MX : IN);
+
+  - type: MAX
+    category: Selection
+    title: Maximum
+    description: OUT = largest input
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs:
+      - {name: IN, type: T, variadic: {min: 2, max: 16, default: 2}}
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      T r = IN[0];
+      for (uint8_t i = 1; i < IN_n; i++) if (IN[i] > r) r = IN[i];
+      OUT = r;
+
+  - type: MIN
+    category: Selection
+    title: Minimum
+    description: OUT = smallest input
+    type_params: {T: {allowed: ANY_MAG, default: INT}}
+    inputs:
+      - {name: IN, type: T, variadic: {min: 2, max: 16, default: 2}}
+    outputs: [{name: OUT, type: T}]
+    cycle: |
+      T r = IN[0];
+      for (uint8_t i = 1; i < IN_n; i++) if (IN[i] < r) r = IN[i];
+      OUT = r;
+
+  # ------------------------------------------------------------ conversion
+  - type: TO_INT
+    category: Conversion
+    title: Convert to INT
+    description: Converts to INT (REAL is rounded; values are clamped to -32768..32767).
+    type_params: {T: {allowed: ANY, default: REAL}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: INT}]
+    cycle: |
+      OUT = plc::conv<int16_t>(IN);
+
+  - type: TO_DINT
+    category: Conversion
+    title: Convert to DINT
+    description: Converts to DINT (REAL is rounded and clamped).
+    type_params: {T: {allowed: ANY, default: REAL}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: DINT}]
+    cycle: |
+      OUT = plc::conv<int32_t>(IN);
+
+  - type: TO_REAL
+    category: Conversion
+    title: Convert to REAL
+    description: Converts to REAL (TIME gives milliseconds).
+    type_params: {T: {allowed: ANY, default: INT}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = (float)IN;
+
+  - type: TO_TIME
+    category: Conversion
+    title: Convert to TIME
+    description: Interprets IN as milliseconds.
+    type_params: {T: {allowed: ANY_NUM, default: DINT}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: TIME}]
+    cycle: |
+      OUT = plc::conv<int32_t>(IN);
+
+  - type: TO_BOOL
+    category: Conversion
+    title: Convert to BOOL
+    description: OUT is TRUE when IN is not zero.
+    type_params: {T: {allowed: ANY_NUM, default: INT}}
+    inputs: [{name: IN, type: T}]
+    outputs: [{name: OUT, type: BOOL}]
+    cycle: |
+      OUT = (IN != 0);

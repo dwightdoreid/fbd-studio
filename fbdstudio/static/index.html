@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FBD Studio</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='8' width='12' height='16' rx='2' fill='%234a6fa5'/><rect x='19' y='8' width='10' height='16' rx='2' fill='%23b0662a'/><path d='M15 16h4' stroke='%23333' stroke-width='2'/></svg>">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">FBD<span>Studio</span></div>
+    <div class="group">
+      <input id="project-name" class="project-name" title="Project name" spellcheck="false">
+      <span id="dirty" class="dirty" title="Unsaved changes" hidden>●</span>
+    </div>
+    <div class="group">
+      <button id="btn-new" title="New project">New</button>
+      <button id="btn-open" title="Open project or example">Open…</button>
+      <button id="btn-save" title="Save (Ctrl+S)">Save</button>
+    </div>
+    <div class="group">
+      <button id="btn-undo" title="Undo (Ctrl+Z)">↶</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)">↷</button>
+      <button id="btn-note" title="Add a text note to the diagram">Note</button>
+      <button id="btn-fit" title="Fit diagram to window (F)">Fit</button>
+    </div>
+    <div class="group">
+      <button id="btn-sim" class="accent" title="Run the program in the simulator (no hardware needed)">▶ Simulate</button>
+      <button id="btn-stop" class="danger" title="Stop simulation / monitoring" hidden>■ Stop</button>
+    </div>
+    <div class="group">
+      <select id="port-select" title="Serial port of the board"></select>
+      <button id="btn-ports" title="Refresh serial ports">⟳</button>
+      <button id="btn-build" title="Compile for the board with PlatformIO">Build</button>
+      <button id="btn-upload" title="Compile and upload to the board">Upload</button>
+      <button id="btn-monitor" title="Connect to the board and watch live values">Monitor</button>
+      <button id="btn-export" title="Download the generated PlatformIO project (.zip)">Export</button>
+    </div>
+    <div class="spacer"></div>
+    <button id="btn-help" title="Help and keyboard shortcuts">?</button>
+  </header>
+
+  <main class="workspace">
+    <aside class="palette">
+      <input id="palette-search" type="search" placeholder="Search blocks…" spellcheck="false">
+      <div id="palette-list" class="palette-list"></div>
+      <div class="palette-footer">
+        <button id="btn-reload-blocks" title="Reload block and board definitions from disk">Reload blocks</button>
+      </div>
+    </aside>
+
+    <section class="canvas-wrap">
+      <svg id="canvas" class="canvas" tabindex="0"></svg>
+      <div id="online-banner" class="online-banner" hidden></div>
+      <div class="zoom-ctrl">
+        <button id="zoom-out" title="Zoom out">−</button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-in" title="Zoom in">+</button>
+      </div>
+    </section>
+
+    <aside class="props" id="props"></aside>
+  </main>
+
+  <section class="bottom">
+    <nav class="tabs">
+      <button data-tab="problems" class="active">Problems <span id="problem-count" class="badge"></span></button>
+      <button data-tab="output">Output</button>
+      <button data-tab="code">Generated code</button>
+      <div class="spacer"></div>
+      <button id="btn-clear-output" class="small" hidden>Clear</button>
+      <button id="btn-copy-code" class="small" hidden>Copy</button>
+    </nav>
+    <div class="tab-body">
+      <div id="tab-problems" class="tab active"><ul id="problems" class="problems"></ul></div>
+      <div id="tab-output" class="tab"><pre id="output" class="output"></pre></div>
+      <div id="tab-code" class="tab"><pre id="code" class="code"></pre></div>
+    </div>
+  </section>
+
+  <footer class="status">
+    <span id="status-link" class="pill">Offline</span>
+    <span id="status-scan"></span>
+    <span id="status-msg"></span>
+    <div class="spacer"></div>
+    <span id="status-board"></span>
+    <span id="status-count"></span>
+  </footer>
+
+  <dialog id="dlg-open" class="dialog">
+    <h2>Open project</h2>
+    <div id="open-list" class="open-list"></div>
+    <div class="dialog-actions"><button value="cancel" formmethod="dialog" onclick="this.closest('dialog').close()">Close</button></div>
+  </dialog>
+
+  <dialog id="dlg-help" class="dialog wide">
+    <h2>FBD Studio — quick help</h2>
+    <div class="help">
+      <h3>Building a program</h3>
+      <ul>
+        <li>Drag blocks from the library on the left onto the canvas (or click a block to add it in the centre).</li>
+        <li>Connect an <b>output</b> (right side) to an <b>input</b> (left side) by dragging between the ports. Port colours show data types:
+          <span class="tchip" style="background:var(--t-bool)">BOOL</span>
+          <span class="tchip" style="background:var(--t-int)">INT</span>
+          <span class="tchip" style="background:var(--t-dint)">DINT</span>
+          <span class="tchip" style="background:var(--t-real)">REAL</span>
+          <span class="tchip" style="background:var(--t-time)">TIME</span></li>
+        <li>Unconnected inputs use the constant shown next to them. Edit it in the properties panel. TIME values use IEC syntax, e.g. <code>T#1s500ms</code>.</li>
+        <li>The program runs as a PLC-style <b>scan cycle</b>. The small <code>#n</code> on each block is its execution order. A dashed wire closes a feedback loop and carries the value from the previous scan.</li>
+      </ul>
+      <h3>Running it</h3>
+      <ul>
+        <li><b>Simulate</b> runs the exact generated code on your PC. Click the switches on DI blocks; use the slider in the properties panel for AI blocks.</li>
+        <li><b>Upload</b> builds with PlatformIO and flashes the board on the selected serial port. <b>Monitor</b> then shows live values from the board.</li>
+        <li>While online, you can change unconnected inputs (setpoints, timer presets) in the properties panel without re-uploading.</li>
+        <li><b>Export</b> gives you the generated PlatformIO project to continue in C++ if you want.</li>
+      </ul>
+      <h3>Keyboard / mouse</h3>
+      <table class="keys">
+        <tr><td>Drag background / middle mouse</td><td>Pan</td></tr>
+        <tr><td>Mouse wheel</td><td>Zoom</td></tr>
+        <tr><td>Shift + drag</td><td>Box select</td></tr>
+        <tr><td>Shift/Ctrl + click</td><td>Add to selection</td></tr>
+        <tr><td>Drag from a connected input</td><td>Move / remove that wire</td></tr>
+        <tr><td>Del / Backspace</td><td>Delete selection</td></tr>
+        <tr><td>Ctrl+C / Ctrl+V / Ctrl+D</td><td>Copy / paste / duplicate</td></tr>
+        <tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo</td></tr>
+        <tr><td>Ctrl+A, F, Ctrl+S</td><td>Select all, fit view, save</td></tr>
+      </table>
+      <h3>Your own blocks</h3>
+      <p>Put YAML block files in <code id="help-blocks-dir"></code> and press <b>Reload blocks</b>. See <code>docs/BLOCKS.md</code> for the format, and the examples that are already in that folder.</p>
+    </div>
+    <div class="dialog-actions"><button onclick="this.closest('dialog').close()">Close</button></div>
+  </dialog>
+
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

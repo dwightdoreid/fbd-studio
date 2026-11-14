@@ -1,0 +1,177 @@
+blocks:
+  - type: TON
+    category: Timers
+    title: On-delay timer
+    description: Q becomes TRUE when IN has been TRUE for at least PT. ET shows elapsed time.
+    inputs:
+      - {name: IN, type: BOOL}
+      - {name: PT, type: TIME, default: "T#1s", description: Preset time}
+    outputs:
+      - {name: Q, type: BOOL}
+      - {name: ET, type: TIME, description: Elapsed time}
+    vars:
+      - {name: start, type: UDINT}
+      - {name: running, type: BOOL}
+    cycle: |
+      if (IN) {
+        if (!running) { running = true; start = millis(); }
+        uint32_t e = millis() - start;
+        uint32_t pt = PT < 0 ? 0 : (uint32_t)PT;
+        if (e >= pt) { Q = true; ET = PT; } else { Q = false; ET = (int32_t)e; }
+      } else {
+        running = false; Q = false; ET = 0;
+      }
+
+  - type: TOF
+    category: Timers
+    title: Off-delay timer
+    description: Q follows IN going TRUE immediately, and stays TRUE for PT after IN goes FALSE.
+    inputs:
+      - {name: IN, type: BOOL}
+      - {name: PT, type: TIME, default: "T#1s", description: Preset time}
+    outputs:
+      - {name: Q, type: BOOL}
+      - {name: ET, type: TIME, description: Elapsed time}
+    vars:
+      - {name: start, type: UDINT}
+      - {name: running, type: BOOL}
+    cycle: |
+      if (IN) {
+        Q = true; ET = 0; running = false;
+      } else if (Q) {
+        if (!running) { running = true; start = millis(); }
+        uint32_t e = millis() - start;
+        uint32_t pt = PT < 0 ? 0 : (uint32_t)PT;
+        if (e >= pt) { Q = false; ET = PT; running = false; } else { ET = (int32_t)e; }
+      }
+
+  - type: TP
+    category: Timers
+    title: Pulse timer
+    description: A rising edge on IN produces a pulse of length PT on Q. The pulse cannot be retriggered while active.
+    inputs:
+      - {name: IN, type: BOOL}
+      - {name: PT, type: TIME, default: "T#1s", description: Pulse time}
+    outputs:
+      - {name: Q, type: BOOL}
+      - {name: ET, type: TIME, description: Elapsed time}
+    vars:
+      - {name: start, type: UDINT}
+      - {name: state, type: USINT}
+    cycle: |
+      // state: 0 = idle, 1 = pulsing, 2 = finished, waiting for IN to go FALSE
+      if (state == 0 && IN) { state = 1; start = millis(); }
+      if (state == 1) {
+        uint32_t e = millis() - start;
+        uint32_t pt = PT < 0 ? 0 : (uint32_t)PT;
+        if (e >= pt) { state = 2; Q = false; ET = PT; } else { Q = true; ET = (int32_t)e; }
+      }
+      if (state == 2 && !IN) { state = 0; ET = 0; }
+
+  - type: CTU
+    category: Counters
+    title: Up counter
+    description: CV counts rising edges on CU. R resets CV to 0. Q is TRUE when CV >= PV.
+    type_params:
+      T: {allowed: ANY_INT, default: INT}
+    includes: ["<limits>"]
+    inputs:
+      - {name: CU, type: BOOL, description: Count up (rising edge)}
+      - {name: R, type: BOOL, description: Reset}
+      - {name: PV, type: T, default: 10, description: Preset value}
+    outputs:
+      - {name: Q, type: BOOL}
+      - {name: CV, type: T, description: Current value}
+    vars:
+      - {name: M, type: BOOL}
+    cycle: |
+      if (R) CV = 0;
+      else if (CU && !M && CV < std::numeric_limits<T>::max()) CV++;
+      M = CU;
+      Q = CV >= PV;
+
+  - type: CTD
+    category: Counters
+    title: Down counter
+    description: LD loads PV into CV. Rising edges on CD decrement CV. Q is TRUE when CV <= 0.
+    type_params:
+      T: {allowed: ANY_INT, default: INT}
+    includes: ["<limits>"]
+    inputs:
+      - {name: CD, type: BOOL, description: Count down (rising edge)}
+      - {name: LD, type: BOOL, description: Load PV}
+      - {name: PV, type: T, default: 10, description: Preset value}
+    outputs:
+      - {name: Q, type: BOOL}
+      - {name: CV, type: T, description: Current value}
+    vars:
+      - {name: M, type: BOOL}
+    cycle: |
+      if (LD) CV = PV;
+      else if (CD && !M && CV > std::numeric_limits<T>::min()) CV--;
+      M = CD;
+      Q = CV <= 0;
+
+  - type: CTUD
+    category: Counters
+    title: Up/down counter
+    description: Counts up on CU and down on CD edges. R resets to 0, LD loads PV. QU = CV >= PV, QD = CV <= 0.
+    type_params:
+      T: {allowed: ANY_INT, default: INT}
+    includes: ["<limits>"]
+    inputs:
+      - {name: CU, type: BOOL}
+      - {name: CD, type: BOOL}
+      - {name: R, type: BOOL}
+      - {name: LD, type: BOOL}
+      - {name: PV, type: T, default: 10}
+    outputs:
+      - {name: QU, type: BOOL}
+      - {name: QD, type: BOOL}
+      - {name: CV, type: T}
+    vars:
+      - {name: MU, type: BOOL}
+      - {name: MD, type: BOOL}
+    cycle: |
+      bool up = CU && !MU, down = CD && !MD;
+      if (R) CV = 0;
+      else if (LD) CV = PV;
+      else if (up && !down && CV < std::numeric_limits<T>::max()) CV++;
+      else if (down && !up && CV > std::numeric_limits<T>::min()) CV--;
+      MU = CU; MD = CD;
+      QU = CV >= PV;
+      QD = CV <= 0;
+
+  - type: BLINK
+    category: Generators
+    title: Blinker / pulse generator
+    description: While EN is TRUE, Q alternates between TRUE for T_ON and FALSE for T_OFF.
+    inputs:
+      - {name: EN, type: BOOL, default: TRUE}
+      - {name: T_ON, type: TIME, default: "T#500ms"}
+      - {name: T_OFF, type: TIME, default: "T#500ms"}
+    outputs:
+      - {name: Q, type: BOOL}
+    vars:
+      - {name: start, type: UDINT}
+      - {name: armed, type: BOOL}
+    cycle: |
+      if (!EN) { Q = false; armed = false; }
+      else if (!armed) { armed = true; Q = true; start = millis(); }
+      else {
+        uint32_t e = millis() - start;
+        int32_t t = Q ? T_ON : T_OFF;
+        if (e >= (uint32_t)(t < 0 ? 0 : t)) { Q = !Q; start = millis(); }
+      }
+
+  - type: FIRST_SCAN
+    category: Generators
+    title: First scan flag
+    description: Q is TRUE only during the first scan cycle after start-up. Useful for initialisation.
+    outputs:
+      - {name: Q, type: BOOL}
+    vars:
+      - {name: done, type: BOOL}
+    cycle: |
+      Q = !done;
+      done = true;

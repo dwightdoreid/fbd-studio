@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "name": "02 Motor start-stop",
+  "description": "Classic start/stop circuit with a latch, plus a running-hours style counter and a delayed 'running' lamp.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DI",
+      "name": "Start",
+      "x": 60.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "Start push button (NO, to GND)"
+    },
+    {
+      "id": "b2",
+      "type": "DI",
+      "name": "Stop",
+      "x": 60.0,
+      "y": 160.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO16",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "Stop push button"
+    },
+    {
+      "id": "b3",
+      "type": "RS",
+      "name": "MotorLatch",
+      "x": 280.0,
+      "y": 80.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "DO",
+      "name": "Motor",
+      "x": 500.0,
+      "y": 80.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO17"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "Motor contactor"
+    },
+    {
+      "id": "b5",
+      "type": "TON",
+      "name": "RunDelay",
+      "x": 500.0,
+      "y": 200.0,
+      "values": {
+        "PT": "T#3s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "DO",
+      "name": "RunLamp",
+      "x": 720.0,
+      "y": 200.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO2"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "CTU",
+      "name": "Starts",
+      "x": 500.0,
+      "y": 320.0,
+      "values": {
+        "PV": 1000
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "S"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "R1"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "Q1"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b3",
+        "port": "Q1"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b5",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b3",
+        "port": "Q1"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "CU"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 60.0,
+      "y": -20.0,
+      "text": "RS is reset-dominant: if Start and Stop are pressed together, the motor stays OFF (safe)."
+    }
+  ]
+}

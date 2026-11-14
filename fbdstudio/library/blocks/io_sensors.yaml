@@ -1,0 +1,134 @@
+# Ready-made sensor blocks. Drivers: fbdstudio/runtime/plc_bme280.h, plc_ds18b20.h, plc_dht.h.
+# All of them work step by step across scans, so the scan cycle never waits for a sensor.
+# In the simulator they report OK = FALSE (no hardware); T/H/P stay 0.
+blocks:
+  - type: BME280
+    category: Sensors
+    title: BME280 / BMP280 climate sensor
+    color: "#2e7d6b"
+    description: >-
+      Temperature (°C), humidity (%RH) and air pressure (hPa) from a Bosch
+      BME280 on the I2C bus. Also works with the BMP280 (no humidity, H = 0).
+      OK is FALSE while the sensor does not answer; then T/H/P keep their last
+      values. Wiring: SDA/SCL (see I2C_BUS), 3.3 V, GND.
+    requires: [i2c]
+    params:
+      - name: addr
+        kind: enum
+        options: {"0x76 (SDO to GND)": "0x76", "0x77 (SDO to 3.3V)": "0x77"}
+        description: I2C address (most modules use 0x76)
+      - {name: interval_ms, kind: int, min: 100, max: 3600000, default: 1000, description: Time between readings in ms}
+    outputs:
+      - {name: T, type: REAL, description: Temperature in °C}
+      - {name: H, type: REAL, description: Relative humidity in % (0 for BMP280)}
+      - {name: P, type: REAL, description: Air pressure in hPa}
+      - {name: OK, type: BOOL}
+    vars:
+      - {name: last, type: UDINT}
+      - {name: tried, type: BOOL}
+      - {name: fails, type: USINT}
+    includes: ['"plc_bme280.h"']
+    members: "plc_bme280::Sensor sensor;"
+    cycle: |
+      plc_bme280::Sensor& s = sensor;
+      uint32_t now = millis();
+      if (!s.chip) {  // not found yet (or lost): try every 3 s
+        if (tried && now - last < 3000) return;
+        tried = true;
+        last = now;
+        s.addr = (uint8_t)addr;
+        if (!s.start()) { OK = false; return; }
+        last = now - (uint32_t)interval_ms;  // read right away
+      }
+      if (now - last < (uint32_t)interval_ms) return;
+      last = now;
+      float t, h, p;
+      if (s.read(t, h, p)) { T = t; H = h; P = p; OK = true; fails = 0; }
+      else if (++fails >= 3) { OK = false; s.chip = 0; }
+    targets:
+      sim:
+        includes: []
+        members: ""
+        init: |
+          Serial.println("BME280: sensors are not simulated (OK stays FALSE)");
+        cycle: |
+          OK = false;
+
+  - type: DS18B20
+    category: Sensors
+    title: DS18B20 1-Wire temperature
+    color: "#2e7d6b"
+    description: >-
+      Temperature (°C) from a DS18B20 (also DS18S20, DS1822), e.g. the
+      waterproof probe. Several sensors can share one pin: add one block per
+      sensor with index 0, 1, 2 ... (the sensors found are listed in the Output
+      panel). Needs a 4.7 kOhm pull-up between data and 3.3 V.
+    requires: []
+    lib_deps: [paulstoffregen/OneWire@^2.3.8]
+    params:
+      - {name: pin, kind: pin, capability: DO, shared: true, description: 1-Wire data pin}
+      - {name: index, kind: int, min: 0, max: 15, default: 0, description: Which sensor on this pin (0 = first found)}
+      - name: resolution
+        kind: enum
+        options: {"12 bit (0.0625 °C, 750 ms)": "12", "11 bit (0.125 °C, 375 ms)": "11", "10 bit (0.25 °C, 188 ms)": "10", "9 bit (0.5 °C, 94 ms)": "9"}
+        description: Resolution and conversion time
+      - {name: interval_ms, kind: int, min: 100, max: 3600000, default: 1000, description: Time between readings in ms}
+    outputs:
+      - {name: T, type: REAL, description: Temperature in °C}
+      - {name: OK, type: BOOL}
+    includes: ['"plc_ds18b20.h"']
+    members: "plc_ds18b20::Sensor sensor;"
+    init: |
+      sensor.setup(pin, index, resolution);
+    cycle: |
+      float t;
+      bool ok = OK;
+      if (sensor.step((uint32_t)interval_ms, t, ok)) T = t;
+      OK = ok;
+    targets:
+      sim:
+        includes: []
+        members: ""
+        init: |
+          Serial.println("DS18B20: sensors are not simulated (OK stays FALSE)");
+        cycle: |
+          OK = false;
+
+  - type: DHT
+    category: Sensors
+    title: DHT11 / DHT22 temperature + humidity
+    color: "#2e7d6b"
+    description: >-
+      Temperature (°C) and humidity (%RH) from a DHT11 or DHT22 (AM2302).
+      The sensor can only be read every 1 s (DHT11) or 2 s (DHT22). A reading
+      takes ~5 ms of the scan in which it happens. OK goes FALSE after 3 failed
+      readings in a row. Needs a pull-up on the data line (most modules have it).
+    requires: []
+    params:
+      - {name: pin, kind: pin, capability: DO, description: Data pin}
+      - name: model
+        kind: enum
+        options: {"DHT22 / AM2302": "1", "DHT11": "0"}
+        description: Sensor type
+      - {name: interval_ms, kind: int, min: 1000, max: 3600000, default: 2000, description: Time between readings in ms}
+    outputs:
+      - {name: T, type: REAL, description: Temperature in °C}
+      - {name: H, type: REAL, description: Relative humidity in %}
+      - {name: OK, type: BOOL}
+    includes: ['"plc_dht.h"']
+    members: "plc_dht::Sensor sensor;"
+    init: |
+      sensor.setup(pin, model != 0);
+    cycle: |
+      float t, h;
+      bool ok = OK;
+      if (sensor.step((uint32_t)interval_ms, t, h, ok)) { T = t; H = h; }
+      OK = ok;
+    targets:
+      sim:
+        includes: []
+        members: ""
+        init: |
+          Serial.println("DHT: sensors are not simulated (OK stays FALSE)");
+        cycle: |
+          OK = false;

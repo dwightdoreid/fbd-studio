@@ -1,0 +1,621 @@
+# Communication blocks: I2C, SPI, WiFi + MQTT, Bluetooth (file name sorts them after I/O in the palette).
+#
+# They need board features (requires:), so they only compile for boards that
+# have them. Helper code lives in fbdstudio/runtime/plc_*.h and is copied into
+# the generated PlatformIO project. In the simulator these blocks do nothing
+# (outputs stay FALSE / 0) and print a note to the Output panel.
+blocks:
+  # =================================================================== I2C
+  - type: I2C_BUS
+    category: I2C & SPI
+    title: I2C bus settings
+    color: "#5b6abf"
+    description: >-
+      Optional: sets the I2C pins and clock. Without this block the I2C blocks
+      use the board's default pins (ESP32 DevKit: SDA GPIO21, SCL GPIO22) at 100 kHz.
+      I2C needs pull-up resistors on SDA and SCL (most sensor modules have them).
+    requires: [i2c]
+    singleton: true
+    params:
+      - {name: sda, kind: pin, capability: I2C, default: "@sda", description: Data pin (SDA)}
+      - {name: scl, kind: pin, capability: I2C, default: "@scl", description: Clock pin (SCL)}
+      - name: clock
+        kind: enum
+        options: {"100 kHz (standard)": "100000", "400 kHz (fast)": "400000"}
+        description: Bus clock
+    outputs:
+      - {name: OK, type: BOOL, description: Bus started}
+    includes: ['"plc_i2c.h"']
+    init: |
+      plc_i2c::configure(sda, scl, (uint32_t)clock);
+    cycle: |
+      OK = plc_i2c::begin();
+    targets:
+      sim:
+        includes: []
+        init: |
+          Serial.println("I2C_BUS: I2C is not simulated (I2C blocks report OK = FALSE)");
+        cycle: |
+          OK = false;
+
+  - type: I2C_READ
+    category: I2C & SPI
+    title: I2C read register
+    color: "#5b6abf"
+    description: >-
+      Reads 1, 2 or 4 bytes from an I2C device (optionally from a register)
+      every 'interval_ms' while EN is TRUE. VALUE keeps the last good reading;
+      OK is FALSE when the device did not answer. Use I2C_SCAN to find addresses.
+    requires: [i2c]
+    params:
+      - {name: addr, kind: int, hex: true, min: 1, max: 127, default: 0x3C, description: "7-bit device address, e.g. 0x76"}
+      - {name: reg, kind: int, hex: true, min: -1, max: 255, default: 0, description: "Register to read (-1 = read without register)"}
+      - name: nbytes
+        kind: enum
+        options: {"1 byte": "1", "2 bytes": "2", "4 bytes": "4"}
+        default: "2 bytes"
+        description: Number of bytes
+      - name: msb_first
+        kind: enum
+        options: {"MSB first (big-endian)": "1", "LSB first (little-endian)": "0"}
+        description: Byte order
+      - {name: signed_value, kind: bool, default: false, description: Interpret as a signed (two's complement) number}
+      - {name: interval_ms, kind: int, min: 0, max: 3600000, default: 100, description: Time between readings in ms (0 = every scan)}
+    inputs:
+      - {name: EN, type: BOOL, default: true}
+    outputs:
+      - {name: VALUE, type: DINT}
+      - {name: OK, type: BOOL, description: Last reading succeeded}
+    vars:
+      - {name: last, type: UDINT}
+      - {name: polled, type: BOOL}
+    includes: ['"plc_i2c.h"']
+    cycle: |
+      if (!EN) { OK = false; polled = false; return; }
+      uint32_t now = millis();
+      if (polled && now - last < (uint32_t)interval_ms) return;
+      polled = true;
+      last = now;
+      uint8_t b[4];
+      OK = plc_i2c::read((uint8_t)addr, reg, b, (uint8_t)nbytes);
+      if (OK) VALUE = plc_text::unpack(b, nbytes, msb_first != 0, signed_value);
+    targets:
+      sim: {includes: [], cycle: "OK = false;"}
+
+  - type: I2C_WRITE
+    category: I2C & SPI
+    title: I2C write register
+    color: "#5b6abf"
+    description: >-
+      Writes VALUE (1, 2 or 4 bytes) to a register of an I2C device. Mode
+      'on rising REQ' writes once per rising edge of REQ. Mode 'on change'
+      writes whenever VALUE changes while REQ is TRUE (retries every 0.5 s on
+      errors). DONE is TRUE for one scan after a successful write; ERR stays
+      TRUE until the next successful write.
+    requires: [i2c]
+    params:
+      - {name: addr, kind: int, hex: true, min: 1, max: 127, default: 0x3C, description: "7-bit device address"}
+      - {name: reg, kind: int, hex: true, min: -1, max: 255, default: 0, description: "Register to write (-1 = no register byte)"}
+      - name: nbytes
+        kind: enum
+        options: {"1 byte": "1", "2 bytes": "2", "4 bytes": "4"}
+        description: Number of bytes
+      - name: msb_first
+        kind: enum
+        options: {"MSB first (big-endian)": "1", "LSB first (little-endian)": "0"}
+        description: Byte order
+      - name: mode
+        kind: enum
+        options: {"on rising REQ": "0", "on change of VALUE": "1"}
+        description: When to write
+    inputs:
+      - {name: REQ, type: BOOL}
+      - {name: VALUE, type: DINT}
+    outputs:
+      - {name: DONE, type: BOOL}
+      - {name: ERR, type: BOOL}
+    vars:
+      - {name: prev, type: BOOL}
+      - {name: sent, type: BOOL}
+      - {name: lastv, type: DINT}
+      - {name: last_try, type: UDINT}
+    includes: ['"plc_i2c.h"']
+    cycle: |
+      DONE = false;
+      bool go;
+      if (mode == 0) go = REQ && !prev;
+      else go = REQ && (!sent || VALUE != lastv) && (!ERR || millis() - last_try >= 500);
+      prev = REQ;
+      if (go) {
+        uint8_t b[4];
+        plc_text::pack(VALUE, b, nbytes, msb_first != 0);
+        last_try = millis();
+        bool ok = plc_i2c::write((uint8_t)addr, reg, b, (uint8_t)nbytes);
+        DONE = ok;
+        ERR = !ok;
+        if (ok) { sent = true; lastv = VALUE; }
+      }
+    targets:
+      sim:
+        includes: []
+        cycle: |
+          DONE = false;
+          if (REQ && !prev) ERR = true;
+          prev = REQ;
+
+  - type: I2C_SCAN
+    category: I2C & SPI
+    title: I2C bus scan
+    color: "#5b6abf"
+    description: >-
+      Looks for I2C devices and prints their addresses to the Output panel
+      (while monitoring). Scans at start-up (if 'at_start') and on every rising
+      edge of EXEC. COUNT = devices found, FIRST = lowest address (-1 = none).
+      A scan takes a few milliseconds.
+    requires: [i2c]
+    params:
+      - {name: at_start, kind: bool, default: true, description: Scan once at start-up}
+    inputs:
+      - {name: EXEC, type: BOOL}
+    outputs:
+      - {name: COUNT, type: INT}
+      - {name: FIRST, type: INT}
+    vars:
+      - {name: prev, type: BOOL}
+      - {name: started, type: BOOL}
+    includes: ['"plc_i2c.h"']
+    cycle: |
+      bool go = (EXEC && !prev) || (at_start && !started);
+      prev = EXEC;
+      started = true;
+      if (!go) return;
+      COUNT = 0;
+      FIRST = -1;
+      char line[40];
+      for (uint8_t a = 1; a < 127; a++) {
+        if (!plc_i2c::probe(a)) continue;
+        if (COUNT == 0) FIRST = a;
+        COUNT++;
+        snprintf(line, sizeof line, "I2C device found at 0x%02X (%d)", a, a);
+        Serial.println(line);
+      }
+      if (COUNT == 0) Serial.println("I2C scan: no devices found (check wiring and pull-ups)");
+    targets:
+      sim:
+        includes: []
+        cycle: |
+          if ((EXEC && !prev) || (at_start && !started)) { COUNT = 0; FIRST = -1; }
+          prev = EXEC; started = true;
+
+  # =================================================================== SPI
+  - type: SPI_BUS
+    category: I2C & SPI
+    title: SPI bus settings
+    color: "#5b6abf"
+    description: >-
+      Optional: sets the SPI pins. Without this block the SPI blocks use the
+      board's default pins (ESP32 DevKit: SCK GPIO18, MISO GPIO19, MOSI GPIO23).
+    requires: [spi]
+    singleton: true
+    params:
+      - {name: sck, kind: pin, capability: SPI, default: "@sck", description: Clock pin (SCK)}
+      - {name: miso, kind: pin, capability: SPI, default: "@miso", description: Data in (MISO)}
+      - {name: mosi, kind: pin, capability: SPI, default: "@mosi", description: Data out (MOSI)}
+    includes: ['"plc_spi.h"']
+    init: |
+      plc_spi::configure(sck, miso, mosi);
+    targets:
+      sim:
+        includes: []
+        init: |
+          Serial.println("SPI_BUS: SPI is not simulated (SPI blocks return RX = 0)");
+
+  - type: SPI_TRANSFER
+    category: I2C & SPI
+    title: SPI transfer
+    color: "#5b6abf"
+    description: >-
+      Exchanges 1-4 bytes with an SPI device: sends TX and returns what the
+      device sent back in RX (MSB of TX first by default). Mode 'on rising REQ'
+      transfers once per rising edge; 'cyclic' transfers every 'interval_ms'
+      while REQ is TRUE. DONE is TRUE for one scan after each transfer.
+      Several blocks may use the same CS pin (e.g. write a command, then read).
+    requires: [spi]
+    params:
+      - {name: cs, kind: pin, capability: DO, shared: true, description: Chip select pin of the device (active LOW)}
+      - {name: clock_hz, kind: int, min: 1000, max: 80000000, default: 1000000, description: Clock frequency in Hz}
+      - name: spi_mode
+        kind: enum
+        options: {"MODE0": SPI_MODE0, "MODE1": SPI_MODE1, "MODE2": SPI_MODE2, "MODE3": SPI_MODE3}
+        description: Clock polarity/phase (see the device datasheet)
+      - name: bit_order
+        kind: enum
+        options: {"MSB first": MSBFIRST, "LSB first": LSBFIRST}
+        description: Bit order on the wire
+      - name: nbytes
+        kind: enum
+        options: {"1 byte": "1", "2 bytes": "2", "3 bytes": "3", "4 bytes": "4"}
+        description: Bytes per transfer
+      - name: trigger
+        kind: enum
+        options: {"on rising REQ": "0", "cyclic while REQ": "1"}
+        description: When to transfer
+      - {name: interval_ms, kind: int, min: 0, max: 3600000, default: 100, description: "Cyclic mode: time between transfers in ms"}
+    inputs:
+      - {name: REQ, type: BOOL}
+      - {name: TX, type: DINT, description: Bytes to send (lowest nbytes bytes)}
+    outputs:
+      - {name: RX, type: DINT}
+      - {name: DONE, type: BOOL}
+    vars:
+      - {name: prev, type: BOOL}
+      - {name: last, type: UDINT}
+      - {name: polled, type: BOOL}
+    includes: ['"plc_spi.h"']
+    init: |
+      pinMode(cs, OUTPUT);
+      digitalWrite(cs, HIGH);
+    cycle: |
+      DONE = false;
+      bool go;
+      uint32_t now = millis();
+      if (trigger == 0) go = REQ && !prev;
+      else { go = REQ && (!polled || now - last >= (uint32_t)interval_ms); if (!REQ) polled = false; }
+      prev = REQ;
+      if (go) {
+        polled = true;
+        last = now;
+        uint8_t tx[4], rx[4];
+        plc_text::pack(TX, tx, nbytes, true);
+        plc_spi::transfer(cs, (uint32_t)clock_hz, bit_order, spi_mode, tx, rx, (uint8_t)nbytes);
+        RX = plc_text::unpack(rx, nbytes, true, false);
+        DONE = true;
+      }
+    targets:
+      sim:
+        includes: []
+        init: |
+          pinMode(cs, OUTPUT);
+          digitalWrite(cs, HIGH);
+        cycle: |
+          DONE = REQ && !prev;
+          prev = REQ;
+
+  # =================================================================== WiFi
+  - type: WIFI
+    category: WiFi & MQTT
+    title: WiFi connection
+    color: "#b5651d"
+    description: >-
+      Connects the board to a WiFi network (2.4 GHz) and keeps reconnecting if
+      the connection drops. The program keeps running while not connected.
+      The IP address is printed to the Output panel when monitoring. Note: the
+      password is stored in the project file and in the generated code.
+    requires: [wifi]
+    singleton: true
+    params:
+      - {name: ssid, kind: string, required: true, default: "", description: Network name (SSID)}
+      - {name: password, kind: string, secret: true, default: "", description: Network password}
+      - {name: hostname, kind: string, default: "fbd-plc", description: Name of the board in the network}
+    outputs:
+      - {name: CONNECTED, type: BOOL}
+      - {name: RSSI, type: INT, description: "Signal strength in dBm (-50 good, -80 weak)"}
+    vars:
+      - {name: tried, type: UDINT}
+    includes: [WiFi.h]
+    init: |
+      if (hostname[0]) WiFi.setHostname(hostname);
+      WiFi.mode(WIFI_STA);
+      WiFi.setAutoReconnect(true);
+      WiFi.begin(ssid, password);
+      tried = millis();
+    cycle: |
+      bool c = WiFi.status() == WL_CONNECTED;
+      if (c && !CONNECTED) {
+        Serial.print("WiFi: connected to ");
+        Serial.print(ssid);
+        Serial.print(", IP ");
+        Serial.println(WiFi.localIP().toString().c_str());
+      } else if (!c && CONNECTED) {
+        Serial.println("WiFi: connection lost, reconnecting");
+      }
+      if (c) tried = millis();
+      else if (millis() - tried > 30000) {  // still not connected: start over
+        tried = millis();
+        WiFi.disconnect();
+        WiFi.begin(ssid, password);
+      }
+      CONNECTED = c;
+      RSSI = c ? (int16_t)WiFi.RSSI() : 0;
+    targets:
+      sim:
+        includes: []
+        init: |
+          Serial.println("WIFI: WiFi is not simulated (CONNECTED stays FALSE)");
+        cycle: |
+          CONNECTED = false;
+          RSSI = 0;
+
+  - type: MQTT_CLIENT
+    category: WiFi & MQTT
+    title: MQTT broker connection
+    color: "#b5651d"
+    description: >-
+      Connects to an MQTT broker (e.g. Mosquitto, Home Assistant, Node-RED)
+      over WiFi. Topics of MQTT_PUB/MQTT_SUB blocks are relative to 'prefix'
+      (a topic starting with / is absolute). The board publishes online/offline
+      to <prefix>/status. Networking runs in the background, so a missing
+      broker never slows down the program. Needs a WIFI block.
+    requires: [wifi]
+    requires_blocks: [WIFI]
+    singleton: true
+    lib_deps: [knolleary/PubSubClient@^2.8]
+    params:
+      - {name: broker, kind: string, required: true, default: "192.168.1.10", description: Broker host name or IP address}
+      - {name: port, kind: int, min: 1, max: 65535, default: 1883, description: Broker port}
+      - {name: prefix, kind: string, default: "fbd/plc1", description: Topic prefix for this board}
+      - {name: client_id, kind: string, default: "", description: "Client id (empty = fbd-<chip id>)"}
+      - {name: user, kind: string, default: "", description: User name (empty = no login)}
+      - {name: password, kind: string, secret: true, default: "", description: Password}
+    outputs:
+      - {name: CONNECTED, type: BOOL}
+      - {name: STATE, type: INT, description: "0 = connected, -2 = broker unreachable, 4/5 = bad login"}
+    includes: ['"plc_mqtt.h"']
+    init: |
+      plc_mqtt::start(broker, port, client_id, user, password, prefix);
+    cycle: |
+      bool c = plc_mqtt::connected();
+      int16_t s = (int16_t)plc_mqtt::state();
+      if (c && !CONNECTED) {
+        Serial.print("MQTT: connected to ");
+        Serial.println(broker);
+      } else if (!c && s != STATE && s != 0) {
+        Serial.print("MQTT: not connected, state ");
+        Serial.println((int)s);
+      }
+      CONNECTED = c;
+      STATE = s;
+    targets:
+      sim:
+        includes: []
+        init: |
+          Serial.println("MQTT_CLIENT: MQTT is not simulated (CONNECTED stays FALSE)");
+        cycle: |
+          CONNECTED = false;
+          STATE = -1;
+
+  - type: MQTT_PUB
+    category: WiFi & MQTT
+    title: MQTT publish
+    color: "#b5651d"
+    description: >-
+      Publishes VALUE to a topic when it changes (at most every 'min_ms') and,
+      if 'every_ms' > 0, periodically. Values are sent as text, e.g. 1/0 or
+      ON/OFF for BOOL, 21.50 for REAL. After a reconnect the current value is
+      sent again. Needs an MQTT_CLIENT block.
+    requires: [wifi]
+    requires_blocks: [MQTT_CLIENT]
+    type_params:
+      T: {allowed: ANY, default: REAL}
+    params:
+      - {name: topic, kind: string, required: true, default: "value", description: "Topic, relative to the client's prefix"}
+      - {name: retain, kind: bool, default: true, description: The broker keeps the last value for new subscribers}
+      - {name: min_ms, kind: int, min: 0, max: 3600000, default: 500, description: Minimum time between messages in ms}
+      - {name: every_ms, kind: int, min: 0, max: 86400000, default: 0, description: "Also publish every ... ms (0 = only on change)"}
+      - {name: decimals, kind: int, min: 0, max: 6, default: 2, description: Decimal places for REAL}
+      - name: bool_style
+        kind: enum
+        options: {"1 / 0": "0", "ON / OFF": "1", "true / false": "2"}
+        description: Text for BOOL values
+    inputs:
+      - {name: VALUE, type: T}
+    vars:
+      - {name: idx, type: DINT, init: -1}
+      - {name: lastv, type: T}
+      - {name: sent, type: BOOL}
+      - {name: last, type: UDINT}
+    includes: ['"plc_mqtt.h"']
+    init: |
+      idx = plc_mqtt::add(topic, false, retain);
+      if (idx < 0) Serial.println("MQTT_PUB: too many MQTT topics (max. 32)");
+    cycle: |
+      uint32_t now = millis();
+      bool due = (!sent || VALUE != lastv) && now - last >= (uint32_t)min_ms;
+      if (every_ms > 0 && now - last >= (uint32_t)every_ms) due = true;
+      if (!due) return;
+      char buf[32];
+      plc_text::format(VALUE, buf, sizeof buf, decimals, bool_style);
+      plc_mqtt::set(idx, buf);
+      lastv = VALUE;
+      sent = true;
+      last = now;
+    targets:
+      sim: {includes: [], init: "", cycle: ""}
+
+  - type: MQTT_SUB
+    category: WiFi & MQTT
+    title: MQTT subscribe
+    color: "#b5651d"
+    description: >-
+      Receives values from a topic. VALUE keeps the last valid value; NEW is
+      TRUE for one scan when a message arrived. Accepted text: numbers, and for
+      BOOL also 1/0, ON/OFF, true/false. Needs an MQTT_CLIENT block.
+    requires: [wifi]
+    requires_blocks: [MQTT_CLIENT]
+    type_params:
+      T: {allowed: ANY, default: REAL}
+    params:
+      - {name: topic, kind: string, required: true, default: "setpoint", description: "Topic, relative to the client's prefix"}
+    outputs:
+      - {name: VALUE, type: T}
+      - {name: NEW, type: BOOL}
+    vars:
+      - {name: idx, type: DINT, init: -1}
+    includes: ['"plc_mqtt.h"']
+    init: |
+      idx = plc_mqtt::add(topic, true, false);
+      if (idx < 0) Serial.println("MQTT_SUB: too many MQTT topics (max. 32)");
+    cycle: |
+      NEW = false;
+      char buf[32];
+      if (plc_mqtt::take(idx, buf, sizeof buf)) {
+        T v;
+        if (plc_text::parse(buf, v)) { VALUE = v; NEW = true; }
+      }
+    targets:
+      sim: {includes: [], init: "", cycle: "NEW = false;"}
+
+  # =================================================================== Bluetooth
+  - type: BT_SERIAL
+    category: Bluetooth
+    title: Bluetooth serial
+    color: "#1f6fb2"
+    description: >-
+      Makes the board visible as a Bluetooth serial device (classic Bluetooth
+      SPP, original ESP32 only). Pair with an Android phone and use a
+      "serial Bluetooth terminal" app, or a PC (it appears as a COM port).
+      BT_SEND/BT_RECV exchange lines like "speed=50". Send "?" to get all
+      values. iPhones do not support this kind of Bluetooth: use BLE_UART for them.
+    requires: [bt_classic]
+    singleton: true
+    excludes_blocks: [BLE_UART]
+    # Bluetooth + WiFi code does not fit the default 1.2 MB app partition.
+    platformio: {board_build.partitions: huge_app.csv}
+    params:
+      - {name: device_name, kind: string, default: "FBD-PLC", description: Name shown when pairing}
+    outputs:
+      - {name: CONNECTED, type: BOOL, description: A phone/PC is connected}
+    includes: ['"plc_bt_classic.h"']
+    init: |
+      if (!plc_bt_classic::start(device_name)) Serial.println("BT_SERIAL: Bluetooth could not be started");
+    cycle: |
+      plc_bt::poll();
+      bool c = plc_bt::connected();
+      if (c != CONNECTED) Serial.println(c ? "Bluetooth: client connected" : "Bluetooth: client disconnected");
+      CONNECTED = c;
+    targets:
+      sim:
+        includes: []
+        init: |
+          Serial.println("BT_SERIAL: Bluetooth is not simulated (CONNECTED stays FALSE)");
+        cycle: |
+          CONNECTED = false;
+
+  - type: BLE_UART
+    category: Bluetooth
+    title: Bluetooth LE (BLE) serial
+    color: "#1f6fb2"
+    description: >-
+      Makes the board a Bluetooth Low Energy device with the Nordic UART
+      Service, the common "serial port over BLE". Works with iPhone and Android
+      apps such as Bluefruit Connect (UART), nRF Toolbox (UART) or Serial
+      Bluetooth Terminal, and with PCs. BT_SEND/BT_RECV exchange lines like
+      "speed=50"; send "?" to get all values. Set a 6-digit passkey so only
+      phones that know it can connect (asked once when pairing).
+    requires: [ble]
+    singleton: true
+    excludes_blocks: [BT_SERIAL]
+    # The BLE stack + WiFi does not fit the default 1.2 MB app partition.
+    platformio: {board_build.partitions: huge_app.csv}
+    params:
+      - {name: device_name, kind: string, required: true, default: "FBD-PLC", description: Name shown when scanning}
+      - {name: passkey, kind: int, min: 0, max: 999999, default: 0, description: "6-digit pairing code, 100000..999999 (0 = no pairing, anyone nearby can connect)"}
+    outputs:
+      - {name: CONNECTED, type: BOOL, description: A phone/PC is connected}
+    includes: ['"plc_ble.h"']
+    init: |
+      plc_ble::start(device_name, (uint32_t)passkey);
+    cycle: |
+      plc_bt::poll();
+      bool c = plc_bt::connected();
+      if (c != CONNECTED) Serial.println(c ? "BLE: client connected" : "BLE: client disconnected");
+      CONNECTED = c;
+    targets:
+      sim:
+        includes: []
+        init: |
+          Serial.println("BLE_UART: Bluetooth is not simulated (CONNECTED stays FALSE)");
+        cycle: |
+          CONNECTED = false;
+
+  - type: BT_SEND
+    category: Bluetooth
+    title: Bluetooth send value
+    color: "#1f6fb2"
+    description: >-
+      Sends "name=value" when VALUE changes (at most every 'min_ms'), when a
+      client connects or asks with "?", and every 'every_ms' if > 0.
+      Needs a BT_SERIAL or BLE_UART block.
+    requires: ["bt_classic|ble"]
+    requires_blocks: ["BT_SERIAL|BLE_UART"]
+    type_params:
+      T: {allowed: ANY, default: REAL}
+    params:
+      - {name: name, kind: string, required: true, default: "value", description: Name in the message}
+      - {name: min_ms, kind: int, min: 0, max: 3600000, default: 200, description: Minimum time between messages in ms}
+      - {name: every_ms, kind: int, min: 0, max: 86400000, default: 0, description: "Also send every ... ms (0 = only on change)"}
+      - {name: decimals, kind: int, min: 0, max: 6, default: 2, description: Decimal places for REAL}
+      - name: bool_style
+        kind: enum
+        options: {"1 / 0": "0", "ON / OFF": "1", "true / false": "2"}
+        description: Text for BOOL values
+    inputs:
+      - {name: VALUE, type: T}
+    vars:
+      - {name: idx, type: DINT, init: -1}
+      - {name: lastv, type: T}
+      - {name: sent, type: BOOL}
+      - {name: last, type: UDINT}
+      - {name: epoch, type: UDINT}
+    includes: ['"plc_bt.h"']
+    init: |
+      idx = plc_bt::add(name, false);
+    cycle: |
+      plc_bt::poll();
+      if (!plc_bt::connected()) { sent = false; return; }
+      uint32_t now = millis();
+      bool due = (!sent || VALUE != lastv) && now - last >= (uint32_t)min_ms;
+      if (every_ms > 0 && now - last >= (uint32_t)every_ms) due = true;
+      if (epoch != plc_bt::epoch()) { epoch = plc_bt::epoch(); due = true; }
+      if (!due) return;
+      char buf[32];
+      plc_text::format(VALUE, buf, sizeof buf, decimals, bool_style);
+      plc_bt::send(idx, buf);
+      lastv = VALUE;
+      sent = true;
+      last = now;
+    targets:
+      sim: {includes: [], init: "", cycle: ""}
+
+  - type: BT_RECV
+    category: Bluetooth
+    title: Bluetooth receive value
+    color: "#1f6fb2"
+    description: >-
+      Receives values sent as "name=value" lines (also "name: value").
+      VALUE keeps the last valid value; NEW is TRUE for one scan when a value
+      arrived. Needs a BT_SERIAL or BLE_UART block.
+    requires: ["bt_classic|ble"]
+    requires_blocks: ["BT_SERIAL|BLE_UART"]
+    type_params:
+      T: {allowed: ANY, default: REAL}
+    params:
+      - {name: name, kind: string, required: true, default: "setpoint", description: Name in the message}
+    outputs:
+      - {name: VALUE, type: T}
+      - {name: NEW, type: BOOL}
+    vars:
+      - {name: idx, type: DINT, init: -1}
+    includes: ['"plc_bt.h"']
+    init: |
+      idx = plc_bt::add(name, true);
+    cycle: |
+      plc_bt::poll();
+      NEW = false;
+      char buf[32];
+      if (plc_bt::take(idx, buf, sizeof buf)) {
+        T v;
+        if (plc_text::parse(buf, v)) { VALUE = v; NEW = true; }
+      }
+    targets:
+      sim: {includes: [], init: "", cycle: "NEW = false;"}

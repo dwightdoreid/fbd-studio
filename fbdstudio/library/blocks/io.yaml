@@ -1,0 +1,67 @@
+# Hardware I/O blocks. They use the Arduino API, which is available on ESP32,
+# STM32 (STM32duino), RP2040 and many more, and is emulated by the simulator.
+blocks:
+  - type: DI
+    category: I/O
+    title: Digital input
+    color: "#2f7d4f"
+    description: Reads a digital input pin. Q is TRUE when the pin is HIGH (or LOW when inverted).
+    params:
+      - {name: pin, kind: pin, capability: DI}
+      - name: mode
+        kind: enum
+        options: {FLOATING: INPUT, PULLUP: INPUT_PULLUP, PULLDOWN: INPUT_PULLDOWN}
+        default: FLOATING
+        description: Internal pull resistor
+      - {name: invert, kind: bool, default: false, description: Invert the signal (for active-low buttons)}
+    outputs:
+      - {name: Q, type: BOOL}
+    init: |
+      pinMode(pin, mode);
+    cycle: |
+      Q = (digitalRead(pin) == HIGH) != invert;
+
+  - type: DO
+    category: I/O
+    title: Digital output
+    color: "#2f7d4f"
+    description: Drives a digital output pin from IN.
+    params:
+      - {name: pin, kind: pin, capability: DO}
+      - {name: invert, kind: bool, default: false, description: Invert the output (for active-low relays/LEDs)}
+    inputs:
+      - {name: IN, type: BOOL}
+    init: |
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, invert ? HIGH : LOW);
+    cycle: |
+      digitalWrite(pin, (IN != invert) ? HIGH : LOW);
+
+  - type: AI
+    category: I/O
+    title: Analog input
+    color: "#2f7d4f"
+    description: Reads an analog input. RAW is the ADC value (0..PLC_ADC_MAX), PCT is 0..100 %.
+    params:
+      - {name: pin, kind: pin, capability: AI}
+    outputs:
+      - {name: RAW, type: INT}
+      - {name: PCT, type: REAL}
+    cycle: |
+      RAW = (int16_t)analogRead(pin);
+      PCT = RAW * 100.0f / PLC_ADC_MAX;
+
+  - type: PWM
+    category: I/O
+    title: PWM output
+    color: "#2f7d4f"
+    description: Outputs a PWM signal with duty cycle IN (0..100 %).
+    params:
+      - {name: pin, kind: pin, capability: PWM}
+    inputs:
+      - {name: IN, type: REAL, description: Duty cycle in %}
+    init: |
+      pinMode(pin, OUTPUT);
+    cycle: |
+      float d = IN < 0.0f ? 0.0f : (IN > 100.0f ? 100.0f : IN);
+      analogWrite(pin, (int)(d * 2.55f + 0.5f));

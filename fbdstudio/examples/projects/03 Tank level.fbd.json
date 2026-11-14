@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "name": "03 Tank level",
+  "description": "An analog level sensor is scaled to 0..100 % and a pump is switched with hysteresis built from comparators and a latch.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "AI",
+      "name": "LevelSensor",
+      "x": 40.0,
+      "y": 80.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO32"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b2",
+      "type": "TO_REAL",
+      "name": "ToReal",
+      "x": 240.0,
+      "y": 80.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b3",
+      "type": "SCALE",
+      "name": "Level",
+      "x": 420.0,
+      "y": 80.0,
+      "values": {
+        "IN_MIN": 0,
+        "IN_MAX": 4095,
+        "OUT_MIN": 0,
+        "OUT_MAX": 100
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "LT",
+      "name": "Low",
+      "x": 640.0,
+      "y": 40.0,
+      "values": {
+        "IN2": 20
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "GT",
+      "name": "High",
+      "x": 640.0,
+      "y": 160.0,
+      "values": {
+        "IN2": 80
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "SR",
+      "name": "Pump",
+      "x": 840.0,
+      "y": 80.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "DO",
+      "name": "PumpOut",
+      "x": 1040.0,
+      "y": 80.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO17"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "RAW"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "S1"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "R"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b6",
+        "port": "Q1"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 40.0,
+      "y": -20.0,
+      "text": "Pump starts below 20 % and stops above 80 %. In the simulator, drag the AI slider in the properties panel."
+    }
+  ]
+}

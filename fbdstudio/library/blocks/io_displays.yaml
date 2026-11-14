@@ -1,0 +1,288 @@
+# Ready-made display blocks. Drivers: fbdstudio/runtime/plc_lcd.h, plc_oled.h.
+#
+# Each line is a text template: {1}..{4} insert the inputs V1..V4 with
+# 'decimals' decimal places, {1:0} / {2:3} with an explicit number of decimals.
+# Example: "Temp {1:1} °C" -> "Temp 21.5 °C". The displays only send what
+# changed, a few characters / one small piece per scan, so the scan stays fast.
+# In the simulator the text is printed to the Output panel when it changes.
+blocks:
+  - type: LCD_I2C
+    category: Displays
+    title: Character LCD (I2C)
+    color: "#6d4c9f"
+    description: >-
+      16x2 or 20x4 character LCD with the common PCF8574 I2C backpack. Each
+      line is a text template, e.g. "Temp {1:1} °C" shows V1 with one decimal.
+      BL switches the backlight. OK is FALSE when the display does not answer
+      (try address 0x3F if 0x27 does not work; I2C_SCAN shows it).
+    requires: [i2c]
+    params:
+      - {name: addr, kind: int, hex: true, min: 1, max: 127, default: 0x27, description: "I2C address (usually 0x27 or 0x3F)"}
+      - name: size
+        kind: enum
+        options: {"16 x 2": "1602", "20 x 4": "2004", "16 x 4": "1604", "20 x 2": "2002"}
+        description: Columns x rows
+      - {name: line1, kind: string, default: "Value {1}", description: Line 1 template}
+      - {name: line2, kind: string, default: "", description: Line 2 template}
+      - {name: line3, kind: string, default: "", description: Line 3 template (4-row displays)}
+      - {name: line4, kind: string, default: "", description: Line 4 template (4-row displays)}
+      - {name: decimals, kind: int, min: 0, max: 6, default: 1, description: "Decimals for {n} (override with {n:d})"}
+      - {name: refresh_ms, kind: int, min: 50, max: 60000, default: 250, description: How often the text is updated (ms)}
+    inputs:
+      - {name: V1, type: REAL}
+      - {name: V2, type: REAL}
+      - {name: V3, type: REAL}
+      - {name: V4, type: REAL}
+      - {name: BL, type: BOOL, default: true, description: Backlight on}
+    outputs:
+      - {name: OK, type: BOOL}
+    vars:
+      - {name: last, type: UDINT}
+      - {name: drawn, type: BOOL}
+    includes: ['"plc_lcd.h"', '"plc_text.h"']
+    members: "plc_lcd::Lcd lcd;"
+    init: |
+      lcd.addr = (uint8_t)addr;
+      lcd.cols = (uint8_t)(size / 100);
+      lcd.rows = (uint8_t)(size % 100);
+    cycle: |
+      uint32_t now = millis();
+      if (!drawn || now - last >= (uint32_t)refresh_ms) {
+        drawn = true;
+        last = now;
+        const char* tmpl[4] = {line1, line2, line3, line4};
+        float v[4] = {V1, V2, V3, V4};
+        char buf[48];
+        for (int r = 0; r < lcd.rows; r++) {
+          plc_text::render(tmpl[r], v, 4, decimals, buf, sizeof buf);
+          lcd.set_line(r, buf);
+        }
+      }
+      lcd.set_backlight(BL);
+      OK = lcd.update(6) && lcd.ready;  // at most 6 characters per scan
+    targets:
+      sim:
+        includes: ['"plc_text.h"']
+        members: "char shown[4][48];"
+        init: |
+          memset(shown, 0, sizeof shown);
+        cycle: |
+          uint32_t now = millis();
+          OK = false;
+          if (drawn && now - last < (uint32_t)refresh_ms) return;
+          drawn = true;
+          last = now;
+          const char* tmpl[4] = {line1, line2, line3, line4};
+          float v[4] = {V1, V2, V3, V4};
+          char buf[48], out[220];
+          bool changed = false;
+          int rows = size % 100, cols = size / 100;
+          out[0] = 0;
+          for (int r = 0; r < rows; r++) {
+            plc_text::render(tmpl[r], v, 4, decimals, buf, sizeof buf);
+            if ((int)strlen(buf) > cols) buf[cols] = 0;
+            if (strcmp(buf, shown[r]) != 0) { changed = true; strcpy(shown[r], buf); }
+            strcat(out, r ? " | " : "LCD: ");
+            strcat(out, buf);
+          }
+          if (changed) Serial.println(out);
+
+  - type: OLED
+    category: Displays
+    title: OLED display (I2C)
+    color: "#6d4c9f"
+    description: >-
+      128x64 or 128x32 I2C OLED with an SSD1306 or SH1106 controller (the
+      common 0.96" and 1.3" modules). Small font: 21 characters x 6 lines
+      (3 on 128x32); large font: 16 characters x 4 lines (2 on 128x32). Each
+      line is a text template like "Temp {1:1} °C". If the 1.3" display shows
+      noise, choose SH1106.
+    requires: [i2c]
+    lib_deps: [olikraus/U8g2@^2.35.30]
+    params:
+      - {name: addr, kind: int, hex: true, min: 1, max: 127, default: 0x3C, description: "I2C address (usually 0x3C, sometimes 0x3D)"}
+      - name: controller
+        kind: enum
+        options: {"SSD1306 128x64 (0.96\")": "0", "SH1106 128x64 (1.3\")": "1", "SSD1306 128x32 (0.91\")": "2"}
+        description: Display type
+      - name: font
+        kind: enum
+        options: {"small (21 x 6)": "0", "large (16 x 4)": "1"}
+        description: Font size
+      - {name: line1, kind: string, default: "Value {1}", description: Line 1 template}
+      - {name: line2, kind: string, default: "", description: Line 2 template}
+      - {name: line3, kind: string, default: "", description: Line 3 template}
+      - {name: line4, kind: string, default: "", description: Line 4 template}
+      - {name: line5, kind: string, default: "", description: Line 5 template (small font)}
+      - {name: line6, kind: string, default: "", description: Line 6 template (small font)}
+      - {name: decimals, kind: int, min: 0, max: 6, default: 1, description: "Decimals for {n} (override with {n:d})"}
+      - {name: refresh_ms, kind: int, min: 50, max: 60000, default: 250, description: How often the text is updated (ms)}
+    inputs:
+      - {name: V1, type: REAL}
+      - {name: V2, type: REAL}
+      - {name: V3, type: REAL}
+      - {name: V4, type: REAL}
+    outputs:
+      - {name: OK, type: BOOL}
+    vars:
+      - {name: last, type: UDINT}
+      - {name: drawn, type: BOOL}
+    includes: ['"plc_oled.h"', '"plc_text.h"']
+    members: "plc_oled::Oled oled;"
+    init: |
+      oled.setup(controller, addr, font);
+    cycle: |
+      uint32_t now = millis();
+      if (!oled.ok) {  // first scan, or display not found: retry every 3 s
+        OK = false;
+        if (oled.started && now - oled.last_try < 3000) return;
+        if (!oled.start()) return;
+        drawn = false;
+      }
+      if (!drawn || now - last >= (uint32_t)refresh_ms) {
+        drawn = true;
+        last = now;
+        const char* tmpl[6] = {line1, line2, line3, line4, line5, line6};
+        float v[4] = {V1, V2, V3, V4};
+        char want[plc_oled::MAX_LINES][plc_oled::LINE_LEN];
+        for (int r = 0; r < plc_oled::MAX_LINES; r++) plc_text::render(tmpl[r], v, 4, decimals, want[r], plc_oled::LINE_LEN);
+        oled.set_lines(want, plc_oled::MAX_LINES);
+      }
+      oled.update();  // one piece (64 bytes) per scan
+      OK = true;
+    targets:
+      sim:
+        includes: ['"plc_text.h"']
+        members: "char shown[6][32];"
+        init: |
+          memset(shown, 0, sizeof shown);
+        cycle: |
+          uint32_t now = millis();
+          OK = false;
+          if (drawn && now - last < (uint32_t)refresh_ms) return;
+          drawn = true;
+          last = now;
+          const char* tmpl[6] = {line1, line2, line3, line4, line5, line6};
+          float v[4] = {V1, V2, V3, V4};
+          int lines = (controller == 2 ? 32 : 64) / (font == 1 ? 16 : 10);
+          char buf[32], out[220];
+          bool changed = false;
+          out[0] = 0;
+          for (int r = 0; r < lines; r++) {
+            plc_text::render(tmpl[r], v, 4, decimals, buf, sizeof buf);
+            if (strcmp(buf, shown[r]) != 0) { changed = true; strcpy(shown[r], buf); }
+            strcat(out, r ? " | " : "OLED: ");
+            strcat(out, buf);
+          }
+          if (changed) Serial.println(out);
+
+  - type: TFT
+    category: Displays
+    title: Colour TFT display (ST7789, SPI)
+    color: "#6d4c9f"
+    description: >-
+      ST7789 colour TFT on the SPI bus, e.g. the built-in 1.14" display of the
+      ideaspark ESP32 board (select that board and the pins are filled in) or
+      1.3"/1.54"/1.9"/2.0" modules. Text lines are templates like
+      "Temp {1:1} °C". Text size 2 on 135x240 (landscape): 20 characters x 7
+      lines. Only changed lines are redrawn, one per scan (~3 ms). SCK/MOSI
+      are the SPI bus pins (board default or SPI_BUS). The first scan takes
+      ~0.6 s while the display starts.
+    requires: [spi]
+    lib_deps: ["adafruit/Adafruit ST7735 and ST7789 Library@^1.10.4", "adafruit/Adafruit GFX Library@^1.11.11"]
+    params:
+      - {name: cs, kind: pin, capability: DO, default: "@tft_cs", description: Chip select (CS)}
+      - {name: dc, kind: pin, capability: DO, default: "@tft_dc", description: Data/command (DC or RS)}
+      - {name: rst, kind: pin, capability: DO, default: "@tft_rst", description: Reset (RST)}
+      - {name: bl, kind: pin, capability: DO, default: "@tft_bl", description: Backlight (BLK)}
+      - name: panel
+        kind: enum
+        options: {"135 x 240 (1.14\")": "135240", "170 x 320 (1.9\")": "170320", "240 x 240 (1.3\"/1.54\")": "240240", "240 x 280 (1.69\")": "240280", "240 x 320 (2.0\")": "240320"}
+        description: Panel resolution
+      - name: rotation
+        kind: enum
+        options: {"landscape": "1", "landscape (flipped)": "3", "portrait": "0", "portrait (flipped)": "2"}
+        description: Orientation
+      - name: text_size
+        kind: enum
+        options: {"2 (12 x 16 px)": "2", "1 (6 x 8 px)": "1", "3 (18 x 24 px)": "3", "4 (24 x 32 px)": "4"}
+        description: Text size
+      - name: fg
+        kind: enum
+        options: {white: "0xFFFF", green: "0x07E0", yellow: "0xFFE0", cyan: "0x07FF", orange: "0xFD20", red: "0xF800", blue: "0x001F", magenta: "0xF81F", black: "0x0000"}
+        description: Text colour
+      - name: bg
+        kind: enum
+        options: {black: "0x0000", blue: "0x0010", dark green: "0x0320", dark grey: "0x2104", white: "0xFFFF"}
+        description: Background colour
+      - {name: line1, kind: string, default: "Value {1}", description: Line 1 template}
+      - {name: line2, kind: string, default: "", description: Line 2 template}
+      - {name: line3, kind: string, default: "", description: Line 3 template}
+      - {name: line4, kind: string, default: "", description: Line 4 template}
+      - {name: line5, kind: string, default: "", description: Line 5 template}
+      - {name: line6, kind: string, default: "", description: Line 6 template}
+      - {name: line7, kind: string, default: "", description: Line 7 template}
+      - {name: line8, kind: string, default: "", description: Line 8 template}
+      - {name: decimals, kind: int, min: 0, max: 6, default: 1, description: "Decimals for {n} (override with {n:d})"}
+      - {name: refresh_ms, kind: int, min: 50, max: 60000, default: 250, description: How often the text is updated (ms)}
+    inputs:
+      - {name: V1, type: REAL}
+      - {name: V2, type: REAL}
+      - {name: V3, type: REAL}
+      - {name: V4, type: REAL}
+      - {name: BL, type: BOOL, default: true, description: Backlight on}
+    outputs:
+      - {name: OK, type: BOOL, description: Display started}
+    vars:
+      - {name: last, type: UDINT}
+      - {name: drawn, type: BOOL}
+    includes: ['"plc_tft.h"', '"plc_text.h"']
+    members: "plc_tft::Tft tft;"
+    init: |
+      tft.setup(cs, dc, rst, bl, panel, rotation, text_size, (uint16_t)fg, (uint16_t)bg);
+    cycle: |
+      if (!tft.started) { tft.start(); drawn = false; }
+      uint32_t now = millis();
+      if (!drawn || now - last >= (uint32_t)refresh_ms) {
+        drawn = true;
+        last = now;
+        const char* tmpl[8] = {line1, line2, line3, line4, line5, line6, line7, line8};
+        float v[4] = {V1, V2, V3, V4};
+        char buf[plc_tft::LINE_LEN];
+        for (int r = 0; r < 8; r++) {
+          plc_text::render(tmpl[r], v, 4, decimals, buf, sizeof buf);
+          tft.set_line(r, buf);
+        }
+      }
+      tft.set_backlight(BL);
+      tft.update();  // at most one changed line per scan
+      OK = true;
+    targets:
+      sim:
+        includes: ['"plc_text.h"']
+        members: "char shown[8][40];"
+        init: |
+          memset(shown, 0, sizeof shown);
+        cycle: |
+          uint32_t now = millis();
+          OK = false;
+          if (drawn && now - last < (uint32_t)refresh_ms) return;
+          drawn = true;
+          last = now;
+          const char* tmpl[8] = {line1, line2, line3, line4, line5, line6, line7, line8};
+          float v[4] = {V1, V2, V3, V4};
+          int w = (rotation == 1 || rotation == 3) ? panel % 1000 : panel / 1000;
+          int h = (rotation == 1 || rotation == 3) ? panel / 1000 : panel % 1000;
+          int lines = h / (8 * text_size + 2), cols = (w - 2) / (6 * text_size);
+          if (lines > 8) lines = 8;
+          char buf[40], out[400];
+          bool changed = false;
+          out[0] = 0;
+          for (int r = 0; r < lines; r++) {
+            plc_text::render(tmpl[r], v, 4, decimals, buf, sizeof buf);
+            if ((int)strlen(buf) > cols) buf[cols] = 0;
+            if (strcmp(buf, shown[r]) != 0) { changed = true; strcpy(shown[r], buf); }
+            strcat(out, r ? " | " : "TFT: ");
+            strcat(out, buf);
+          }
+          if (changed) Serial.println(out);

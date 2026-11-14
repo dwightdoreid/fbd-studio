@@ -1,0 +1,35 @@
+# Example user blocks. Files in this folder are loaded at start-up and when you
+# press "Reload blocks" in FBD Studio. Edit them, copy them, make your own!
+# Full reference: docs/BLOCKS.md
+blocks:
+  - type: HYST
+    category: User examples
+    title: Hysteresis switch
+    description: >
+      Q switches ON when IN rises to HIGH and OFF when IN falls to LOW.
+      Typical for thermostats and level control.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: HIGH_, type: REAL, default: 60, description: Switch-on level}
+      - {name: LOW_, type: REAL, default: 40, description: Switch-off level}
+    outputs:
+      - {name: Q, type: BOOL}
+    cycle: |
+      if (IN >= HIGH_) Q = true;
+      else if (IN <= LOW_) Q = false;
+
+  - type: DEBOUNCE
+    category: User examples
+    title: Debounce filter
+    description: OUT only changes after IN has been stable for PT. Use after mechanical buttons and switches.
+    inputs:
+      - {name: IN, type: BOOL}
+      - {name: PT, type: TIME, default: "T#30ms"}
+    outputs:
+      - {name: OUT, type: BOOL}
+    vars:
+      - {name: last, type: BOOL}
+      - {name: since, type: UDINT}
+    cycle: |
+      if (IN != last) { last = IN; since = millis(); }
+      else if ((uint32_t)(millis() - since) >= (uint32_t)(PT < 0 ? 0 : PT)) OUT = IN;

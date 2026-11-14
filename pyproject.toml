@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fbdstudio"
+version = "0.1.0"
+description = "PLC-style function block diagram (FBD) programming for microcontrollers such as ESP32 and STM32"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+build = ["platformio>=6.1"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+fbdstudio = "fbdstudio.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["fbdstudio*"]
+
+[tool.setuptools.package-data]
+fbdstudio = [
+    "library/blocks/*.yaml",
+    "library/boards/*.yaml",
+    "runtime/*.h",
+    "runtime/sim/*",
+    "static/*.html",
+    "static/css/*",
+    "static/js/*",
+    "examples/blocks/*",
+    "examples/projects/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

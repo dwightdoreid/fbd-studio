@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "name": "01 Blink",
+  "description": "The 'hello world' of microcontrollers: the on-board LED (GPIO2) blinks. Change T_ON / T_OFF while running in the simulator!",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "BLINK",
+      "name": "Blinker",
+      "x": 80.0,
+      "y": 100.0,
+      "values": {
+        "T_ON": "T#500ms",
+        "T_OFF": "T#500ms"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b2",
+      "type": "DO",
+      "name": "LED",
+      "x": 320.0,
+      "y": 100.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO2"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": 20.0,
+      "text": "BLINK toggles Q while EN is TRUE. DO writes it to the LED pin."
+    }
+  ]
+}
