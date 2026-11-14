@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "name": "05 Timers",
+  "description": "The three IEC timers on one button: TON switches on after the button was held for 2 s, TOF keeps a light on for 10 s after release (staircase light), TP gives a fixed 1 s pulse per press.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DI",
+      "name": "Button",
+      "x": 80.0,
+      "y": 160.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "push button to GND"
+    },
+    {
+      "id": "b2",
+      "type": "TON",
+      "name": "HoldDelay",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "PT": "T#2s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "on-delay"
+    },
+    {
+      "id": "b3",
+      "type": "DO",
+      "name": "HoldLamp",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "TOF",
+      "name": "StairLight",
+      "x": 330.0,
+      "y": 182.0,
+      "values": {
+        "PT": "T#10s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "off-delay"
+    },
+    {
+      "id": "b5",
+      "type": "DO",
+      "name": "Light",
+      "x": 580.0,
+      "y": 144.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO26"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "TP",
+      "name": "Beep",
+      "x": 330.0,
+      "y": 304.0,
+      "values": {
+        "PT": "T#1s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "pulse"
+    },
+    {
+      "id": "b7",
+      "type": "DO",
+      "name": "Buzzer",
+      "x": 580.0,
+      "y": 228.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO27"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b6",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Watch ET (elapsed time) count while simulating. PT can be changed online, e.g. T#500ms,\nT#1m30s."
+    }
+  ]
+}

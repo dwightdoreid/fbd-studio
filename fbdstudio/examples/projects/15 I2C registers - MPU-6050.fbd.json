@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "name": "15 I2C registers - MPU-6050",
+  "description": "Raw I2C register access with an MPU-6050 accelerometer: I2C_SCAN lists the devices, I2C_READ checks the WHO_AM_I register (0x75 = 0x68), I2C_WRITE wakes the chip up, and the Z acceleration is read and converted to g.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "I2C_SCAN",
+      "name": "Scan",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "addresses appear in the Output panel"
+    },
+    {
+      "id": "b2",
+      "type": "I2C_READ",
+      "name": "WhoAmI",
+      "x": 80.0,
+      "y": 190.0,
+      "values": {},
+      "params": {
+        "addr": 104,
+        "reg": 117,
+        "nbytes": "1 byte",
+        "interval_ms": 1000
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "SDA GPIO21, SCL GPIO22"
+    },
+    {
+      "id": "b3",
+      "type": "I2C_READ",
+      "name": "AccelZ",
+      "x": 80.0,
+      "y": 350.0,
+      "values": {},
+      "params": {
+        "addr": 104,
+        "reg": 63,
+        "nbytes": "2 bytes",
+        "signed_value": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "ACCEL_ZOUT, +/-2 g range"
+    },
+    {
+      "id": "b4",
+      "type": "I2C_WRITE",
+      "name": "WakeUp",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "VALUE": "0"
+      },
+      "params": {
+        "addr": 104,
+        "reg": 107,
+        "mode": "on change of VALUE"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "PWR_MGMT_1 = 0 (wake up)"
+    },
+    {
+      "id": "b5",
+      "type": "EQ",
+      "name": "Found",
+      "x": 330.0,
+      "y": 190.0,
+      "values": {
+        "IN2": "104"
+      },
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": "WHO_AM_I = 0x68"
+    },
+    {
+      "id": "b6",
+      "type": "DO",
+      "name": "FoundLamp",
+      "x": 580.0,
+      "y": 190.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO2"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "TO_REAL",
+      "name": "ToReal",
+      "x": 330.0,
+      "y": 350.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "DIV",
+      "name": "ZinG",
+      "x": 580.0,
+      "y": 350.0,
+      "values": {
+        "IN2": "16384.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "16384 counts = 1 g"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b2",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b2",
+        "port": "OK"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "REQ"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b3",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b7",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN1"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -6.0,
+      "text": "Addresses and registers are entered in hex (0x68). Lying flat, ZinG shows about 1.0."
+    }
+  ]
+}

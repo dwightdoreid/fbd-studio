@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "name": "04 Logic gates",
+  "description": "AND, XOR and NOT: a two-hand safety control (the press only runs while both buttons are held) and a two-way light switch as in a staircase (either switch toggles the light).",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DI",
+      "name": "LeftHand",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "button to GND"
+    },
+    {
+      "id": "b2",
+      "type": "DI",
+      "name": "RightHand",
+      "x": 80.0,
+      "y": 164.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO16",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b3",
+      "type": "AND",
+      "name": "BothHands",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "DO",
+      "name": "Press",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "press valve"
+    },
+    {
+      "id": "b5",
+      "type": "NOT",
+      "name": "Idle",
+      "x": 580.0,
+      "y": 164.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "DO",
+      "name": "ReadyLamp",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO26"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "on while the press is idle"
+    },
+    {
+      "id": "b7",
+      "type": "DI",
+      "name": "SwitchDown",
+      "x": 80.0,
+      "y": 330.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO17",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "switch at the bottom of the stairs"
+    },
+    {
+      "id": "b8",
+      "type": "DI",
+      "name": "SwitchUp",
+      "x": 80.0,
+      "y": 434.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO18",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b9",
+      "type": "XOR",
+      "name": "TwoWay",
+      "x": 330.0,
+      "y": 330.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b10",
+      "type": "DO",
+      "name": "StairLight",
+      "x": 580.0,
+      "y": 330.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO27"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b7",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b8",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b9",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b10",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "In the simulator, click the DI switches. AND, OR and XOR can have up to 16 inputs (select\nthe block, set the number of inputs)."
+    }
+  ]
+}

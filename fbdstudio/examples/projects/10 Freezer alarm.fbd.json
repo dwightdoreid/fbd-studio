@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "name": "10 Freezer alarm",
+  "description": "Two DS18B20 probes on one 1-Wire pin watch a freezer and a fridge. An alarm sounds when the freezer is warmer than -15 °C for 5 minutes or a probe fails. Temperatures and alarm state are shown on a 128x64 OLED.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DS18B20",
+      "name": "Freezer",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "index": 0
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "4.7 kOhm pull-up to 3.3 V"
+    },
+    {
+      "id": "b2",
+      "type": "DS18B20",
+      "name": "Fridge",
+      "x": 80.0,
+      "y": 330.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "index": 1
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "same pin, second probe"
+    },
+    {
+      "id": "b3",
+      "type": "GT",
+      "name": "TooWarm",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "IN2": "-15.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "TON",
+      "name": "Delay",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {
+        "PT": "T#5m"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "ignore short door openings"
+    },
+    {
+      "id": "b5",
+      "type": "NOT",
+      "name": "ProbeFault",
+      "x": 330.0,
+      "y": 162.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "OR",
+      "name": "Alarm",
+      "x": 830.0,
+      "y": 140.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "DO",
+      "name": "Buzzer",
+      "x": 1080.0,
+      "y": 140.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "TO_REAL",
+      "name": "AlarmNum",
+      "x": 1080.0,
+      "y": 240.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b9",
+      "type": "OLED",
+      "name": "Screen",
+      "x": 1330.0,
+      "y": 300.0,
+      "values": {},
+      "params": {
+        "font": "large (16 x 4)",
+        "line1": "Freezer {1:1}°C",
+        "line2": "Fridge  {2:1}°C",
+        "line4": "Alarm {3:0}"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "SDA GPIO21, SCL GPIO22"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b1",
+        "port": "OK"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "V1"
+      }
+    },
+    {
+      "id": "w9",
+      "src": {
+        "block": "b2",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "V2"
+      }
+    },
+    {
+      "id": "w10",
+      "src": {
+        "block": "b8",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "V3"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Which probe is index 0 and which is 1 depends on their serial numbers: the probes found\nare listed in the Output panel while monitoring."
+    }
+  ]
+}

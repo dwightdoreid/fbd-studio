@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "name": "16 SPI thermocouple - MAX6675",
+  "description": "Reads a K-type thermocouple through a MAX6675 on the SPI bus: a 2-byte transfer every 250 ms. Temperature = (RX / 8) x 0.25 °C; bit 2 is set when the thermocouple is not connected.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "SPI_TRANSFER",
+      "name": "Max6675",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {
+        "REQ": "TRUE"
+      },
+      "params": {
+        "cs": "GPIO16",
+        "nbytes": "2 bytes",
+        "trigger": "cyclic while REQ",
+        "interval_ms": 250,
+        "clock_hz": 1000000
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "SCK GPIO18, SO -> MISO GPIO19"
+    },
+    {
+      "id": "b2",
+      "type": "DIV",
+      "name": "Shift3",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "IN2": "8"
+      },
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": "drop the 3 status bits"
+    },
+    {
+      "id": "b3",
+      "type": "TO_REAL",
+      "name": "Counts",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "MUL",
+      "name": "TempC",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {
+        "IN2": "0.25"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "0.25 °C per count"
+    },
+    {
+      "id": "b5",
+      "type": "DIV",
+      "name": "Shift2",
+      "x": 330.0,
+      "y": 230.0,
+      "values": {
+        "IN2": "4"
+      },
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "MOD",
+      "name": "Bit2",
+      "x": 580.0,
+      "y": 230.0,
+      "values": {
+        "IN2": "2"
+      },
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "TO_BOOL",
+      "name": "Open",
+      "x": 830.0,
+      "y": 230.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "DO",
+      "name": "FaultLamp",
+      "x": 1080.0,
+      "y": 230.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "thermocouple open"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "RX"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b1",
+        "port": "RX"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b7",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Wiring: SCK -> GPIO18, SO -> GPIO19 (MISO), CS -> GPIO16, VCC 3.3 V. Other SPI chips: set\nTX, the number of bytes and the SPI mode from the datasheet."
+    }
+  ]
+}

@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "name": "13 Phone control over BLE",
+  "description": "Control the board from an iPhone or Android phone over Bluetooth Low Energy: switch the LED, set a PWM brightness, and see a potentiometer and the BOOT button live. Use a BLE UART app such as Bluefruit Connect or nRF Toolbox.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "BLE_UART",
+      "name": "Ble",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "device_name": "FBD-PLC"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "set a passkey to require pairing"
+    },
+    {
+      "id": "b2",
+      "type": "BT_RECV",
+      "name": "LedCmd",
+      "x": 80.0,
+      "y": 170.0,
+      "values": {},
+      "params": {
+        "name": "led"
+      },
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b3",
+      "type": "DO",
+      "name": "LED",
+      "x": 330.0,
+      "y": 170.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO2"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "on-board LED"
+    },
+    {
+      "id": "b4",
+      "type": "BT_RECV",
+      "name": "DimCmd",
+      "x": 80.0,
+      "y": 280.0,
+      "values": {},
+      "params": {
+        "name": "dim"
+      },
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "PWM",
+      "name": "Lamp",
+      "x": 330.0,
+      "y": 280.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "AI",
+      "name": "Knob",
+      "x": 80.0,
+      "y": 390.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO32"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "BT_SEND",
+      "name": "SendKnob",
+      "x": 330.0,
+      "y": 408.0,
+      "values": {},
+      "params": {
+        "name": "knob",
+        "decimals": 0
+      },
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "DI",
+      "name": "Boot",
+      "x": 80.0,
+      "y": 520.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO0",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "BOOT button"
+    },
+    {
+      "id": "b9",
+      "type": "BT_SEND",
+      "name": "SendButton",
+      "x": 330.0,
+      "y": 520.0,
+      "values": {},
+      "params": {
+        "name": "button"
+      },
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b2",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b4",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b6",
+        "port": "PCT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "VALUE"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b8",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "VALUE"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "In the app's UART screen send  led=1  led=0  dim=40 . The board sends lines like  knob=37\nbutton=1 ; send  ?  to get all values again."
+    }
+  ]
+}

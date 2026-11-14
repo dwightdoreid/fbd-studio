@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "name": "08 Thermostat",
+  "description": "A heating thermostat with a day/night setpoint (SEL) and a switching hysteresis of +/- 0.5 °C (SUB, ADD, LT, GT, SR). The temperature comes from an analog sensor scaled to 0..50 °C.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "AI",
+      "name": "TempSensor",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO32"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "e.g. an analog temperature transmitter"
+    },
+    {
+      "id": "b2",
+      "type": "SCALE",
+      "name": "Temp",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "IN_MAX": "100.0",
+        "OUT_MAX": "50.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "0..100 % -> 0..50 °C"
+    },
+    {
+      "id": "b3",
+      "type": "DI",
+      "name": "Night",
+      "x": 80.0,
+      "y": 250.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "night mode switch"
+    },
+    {
+      "id": "b4",
+      "type": "SEL",
+      "name": "Setpoint",
+      "x": 330.0,
+      "y": 250.0,
+      "values": {
+        "IN0": "21.0",
+        "IN1": "17.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "day 21 °C, night 17 °C"
+    },
+    {
+      "id": "b5",
+      "type": "SUB",
+      "name": "OnBelow",
+      "x": 580.0,
+      "y": 250.0,
+      "values": {
+        "IN2": "0.5"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "ADD",
+      "name": "OffAbove",
+      "x": 580.0,
+      "y": 352.0,
+      "values": {
+        "IN2": "0.5"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "LT",
+      "name": "TooCold",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "GT",
+      "name": "WarmEnough",
+      "x": 830.0,
+      "y": 162.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b9",
+      "type": "SR",
+      "name": "HeaterLatch",
+      "x": 1080.0,
+      "y": 100.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b10",
+      "type": "DO",
+      "name": "Heater",
+      "x": 1330.0,
+      "y": 100.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "heater relay"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "PCT"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b3",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "G"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w9",
+      "src": {
+        "block": "b7",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "S1"
+      }
+    },
+    {
+      "id": "w10",
+      "src": {
+        "block": "b8",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "R"
+      }
+    },
+    {
+      "id": "w11",
+      "src": {
+        "block": "b9",
+        "port": "Q1"
+      },
+      "dst": {
+        "block": "b10",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "The heater switches on below setpoint - 0.5 °C and off above setpoint + 0.5 °C, so the\nrelay does not chatter. The setpoints can be changed online."
+    }
+  ]
+}

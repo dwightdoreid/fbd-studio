@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "name": "07 PWM dimmer",
+  "description": "A potentiometer on an analog input sets the brightness of an LED via PWM (0..100 %). LIMIT keeps the brightness between 5 and 95 %, and a switch turns the light off with SEL.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "AI",
+      "name": "Knob",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO32"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "potentiometer wiper"
+    },
+    {
+      "id": "b2",
+      "type": "DI",
+      "name": "OnSwitch",
+      "x": 330.0,
+      "y": 200.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b3",
+      "type": "LIMIT",
+      "name": "Range",
+      "x": 330.0,
+      "y": 284.0,
+      "values": {
+        "MN": "5.0",
+        "MX": "95.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "SEL",
+      "name": "OnOff",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {
+        "IN0": "0.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "PWM",
+      "name": "LED",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "LED + 220 Ohm resistor"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "PCT"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "G"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Simulator: drag the AI slider in the properties panel (select the Knob block). SEL passes\nIN0 when G is FALSE and IN1 when G is TRUE."
+    }
+  ]
+}

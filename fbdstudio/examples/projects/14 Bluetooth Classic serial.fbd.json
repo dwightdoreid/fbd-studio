@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "name": "14 Bluetooth Classic serial",
+  "description": "Bluetooth Classic serial (SPP) for Android phones and PCs (not iPhone: use the BLE example). Counts button presses and sends the count; sending reset=1 sets the counter back to 0.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "BT_SERIAL",
+      "name": "Bt",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "device_name": "FBD-PLC"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "pair it, then open the serial port"
+    },
+    {
+      "id": "b2",
+      "type": "DI",
+      "name": "Button",
+      "x": 80.0,
+      "y": 164.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO0",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "BOOT button"
+    },
+    {
+      "id": "b3",
+      "type": "BT_RECV",
+      "name": "ResetCmd",
+      "x": 80.0,
+      "y": 268.0,
+      "values": {},
+      "params": {
+        "name": "reset"
+      },
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "CTU",
+      "name": "Presses",
+      "x": 330.0,
+      "y": 160.0,
+      "values": {
+        "PV": "100"
+      },
+      "params": {},
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "BT_SEND",
+      "name": "SendCount",
+      "x": 580.0,
+      "y": 160.0,
+      "values": {},
+      "params": {
+        "name": "count"
+      },
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "CU"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b3",
+        "port": "NEW"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "R"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b4",
+        "port": "CV"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "VALUE"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Android: Serial Bluetooth Terminal. PC: pair, then open the new serial (COM) port with any\nterminal. NEW is TRUE for one scan per received message."
+    }
+  ]
+}

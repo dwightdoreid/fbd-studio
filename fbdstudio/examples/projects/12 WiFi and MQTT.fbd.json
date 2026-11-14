@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "name": "12 WiFi and MQTT",
+  "description": "Connects to WiFi and an MQTT broker (Mosquitto, Home Assistant, Node-RED). Publishes a light level, a door contact and the WiFi signal strength; subscribes to a relay command and an LED brightness. Enter your WiFi and broker settings first!",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "WIFI",
+      "name": "WiFi",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "ssid": "MyWiFi",
+        "password": "change-me",
+        "hostname": "fbd-plc1"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "enter your network here"
+    },
+    {
+      "id": "b2",
+      "type": "MQTT_CLIENT",
+      "name": "Broker",
+      "x": 80.0,
+      "y": 182.0,
+      "values": {},
+      "params": {
+        "broker": "192.168.1.10",
+        "prefix": "fbd/plc1"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "and your broker here"
+    },
+    {
+      "id": "b3",
+      "type": "AI",
+      "name": "LightSensor",
+      "x": 80.0,
+      "y": 304.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO32"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "LDR divider; ADC1 pins only with WiFi"
+    },
+    {
+      "id": "b4",
+      "type": "DI",
+      "name": "Door",
+      "x": 80.0,
+      "y": 426.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "reed contact"
+    },
+    {
+      "id": "b5",
+      "type": "MQTT_PUB",
+      "name": "PubRssi",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "topic": "rssi",
+        "every_ms": 60000,
+        "min_ms": 10000
+      },
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "MQTT_PUB",
+      "name": "PubLight",
+      "x": 330.0,
+      "y": 144.0,
+      "values": {},
+      "params": {
+        "topic": "light",
+        "decimals": 0,
+        "min_ms": 2000
+      },
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "MQTT_PUB",
+      "name": "PubDoor",
+      "x": 330.0,
+      "y": 228.0,
+      "values": {},
+      "params": {
+        "topic": "door",
+        "bool_style": "ON / OFF"
+      },
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "MQTT_SUB",
+      "name": "SubRelay",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "topic": "relay/set"
+      },
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b9",
+      "type": "DO",
+      "name": "Relay",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b10",
+      "type": "MQTT_SUB",
+      "name": "SubDim",
+      "x": 580.0,
+      "y": 162.0,
+      "values": {},
+      "params": {
+        "topic": "dim/set"
+      },
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b11",
+      "type": "PWM",
+      "name": "LED",
+      "x": 830.0,
+      "y": 144.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO26"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "RSSI"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "VALUE"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b3",
+        "port": "PCT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "VALUE"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b4",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "VALUE"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b8",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b10",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b11",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -74.0,
+      "text": "Try it: mosquitto_sub -h 192.168.1.10 -t 'fbd/plc1/#' -v   and   mosquitto_pub -h\n192.168.1.10 -t fbd/plc1/relay/set -m ON"
+    },
+    {
+      "id": "n2",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Topics are relative to the prefix (fbd/plc1/light ...). The board also publishes\nonline/offline to fbd/plc1/status."
+    }
+  ]
+}

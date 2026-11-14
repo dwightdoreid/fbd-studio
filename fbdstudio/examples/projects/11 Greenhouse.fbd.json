@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "name": "11 Greenhouse",
+  "description": "A DHT22 measures temperature and humidity in a greenhouse. A fan runs above 80 % humidity or 30 °C, a frost heater runs below 3 °C. MAX with a feedback wire keeps the highest temperature since start-up.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DHT",
+      "name": "Sensor",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "model": "DHT22 / AM2302"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "DHT22 module (with pull-up)"
+    },
+    {
+      "id": "b2",
+      "type": "GT",
+      "name": "Humid",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "IN2": "80.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b3",
+      "type": "GT",
+      "name": "Hot",
+      "x": 330.0,
+      "y": 162.0,
+      "values": {
+        "IN2": "30.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "OR",
+      "name": "NeedAir",
+      "x": 580.0,
+      "y": 100.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "DO",
+      "name": "Fan",
+      "x": 830.0,
+      "y": 100.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "LT",
+      "name": "Frost",
+      "x": 330.0,
+      "y": 264.0,
+      "values": {
+        "IN2": "3.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "DO",
+      "name": "FrostHeater",
+      "x": 830.0,
+      "y": 184.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO26"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "MAX",
+      "name": "Highest",
+      "x": 330.0,
+      "y": 366.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "feedback: OUT -> IN2"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "H"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w9",
+      "src": {
+        "block": "b8",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN2"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "A wire from an output back to an input of the same block uses the value of the previous\nscan, so MAX remembers the highest value."
+    }
+  ]
+}

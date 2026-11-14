@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "name": "09 Weather station",
+  "description": "A BME280 on the I2C bus measures temperature, humidity and air pressure and shows them on a 16x2 I2C LCD. An output switches on when the humidity is above 70 %.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "BME280",
+      "name": "Climate",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "addr": "0x76 (SDO to GND)"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "SDA GPIO21, SCL GPIO22, 3.3 V"
+    },
+    {
+      "id": "b2",
+      "type": "LCD_I2C",
+      "name": "Display",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "addr": 39,
+        "size": "16 x 2",
+        "line1": "{1:1}°C  {2:0}%RH",
+        "line2": "{3:1} hPa"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "PCF8574 backpack, same I2C bus"
+    },
+    {
+      "id": "b3",
+      "type": "GT",
+      "name": "Humid",
+      "x": 330.0,
+      "y": 230.0,
+      "values": {
+        "IN2": "70.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "DO",
+      "name": "Dehumidifier",
+      "x": 580.0,
+      "y": 236.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "V1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b1",
+        "port": "H"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "V2"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b1",
+        "port": "P"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "V3"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b1",
+        "port": "H"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Display lines are templates: {1} is V1, {1:1} shows it with one decimal. Use the I2C bus\nscan example if the display stays dark (try address 0x3F)."
+    }
+  ]
+}

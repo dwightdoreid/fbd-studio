@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "name": "17 ideaspark TFT display",
+  "description": "For the ideaspark ESP32 board with the built-in 1.14\" LCD: shows a seconds counter, the BOOT button and a value you can change online (V3) on the colour display.",
+  "board": "ideaspark_esp32_lcd114",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "blink",
+      "type": "BLINK",
+      "name": "BLINK_1",
+      "x": 60,
+      "y": 60,
+      "values": {
+        "T_ON": "T#500ms",
+        "T_OFF": "T#500ms"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "ctu",
+      "type": "CTU",
+      "name": "CTU_1",
+      "x": 260,
+      "y": 60,
+      "values": {
+        "PV": "32767"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "boot",
+      "type": "DI",
+      "name": "BOOT",
+      "x": 60,
+      "y": 260,
+      "values": {},
+      "params": {
+        "pin": "GPIO0",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "BOOT button: TRUE while pressed"
+    },
+    {
+      "id": "conv",
+      "type": "TO_REAL",
+      "name": "TO_REAL_1",
+      "x": 260,
+      "y": 260,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "BOOL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "tft",
+      "type": "TFT",
+      "name": "Display",
+      "x": 480,
+      "y": 60,
+      "values": {
+        "V3": "21.5"
+      },
+      "params": {
+        "line1": "FBD Studio",
+        "line2": "ideaspark ESP32",
+        "line3": "Seconds: {1:0}",
+        "line4": "BOOT button: {2:0}",
+        "line5": "Temp {3:1} °C",
+        "fg": "green"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "change V3 online while monitoring"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "blink",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "ctu",
+        "port": "CU"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "ctu",
+        "port": "CV"
+      },
+      "dst": {
+        "block": "tft",
+        "port": "V1"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "boot",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "conv",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "conv",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "tft",
+        "port": "V2"
+      }
+    }
+  ],
+  "notes": []
+}

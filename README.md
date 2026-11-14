@@ -70,6 +70,32 @@ Requirements:
 Projects, your own blocks and build output live in a workspace folder
 (default `~/FBDStudio`, change it with `--workspace`).
 
+## Examples
+
+Open them with **Open...**; saving stores a copy in your workspace. Everything
+runs in the simulator, and the sensor, display and radio blocks also need the
+hardware named. Unless noted, examples are for a generic ESP32 DevKit.
+
+| Example | Shows |
+|---|---|
+| 01 Blink | BLINK, DO: the on-board LED |
+| 02 Motor start-stop | RS latch, TON, CTU: a classic motor circuit |
+| 03 Tank level | AI, SCALE, LT/GT, SR: pump control with hysteresis |
+| 04 Logic gates | AND, XOR, NOT: two-hand safety control, two-way light switch |
+| 05 Timers | TON, TOF, TP on one button |
+| 06 Car park counter | CTUD up/down counter, SUB, LE |
+| 07 PWM dimmer | AI potentiometer, LIMIT, SEL, PWM |
+| 08 Thermostat | day/night setpoint (SEL), hysteresis with SUB/ADD/LT/GT/SR |
+| 09 Weather station | BME280 sensor, 16x2 I2C LCD |
+| 10 Freezer alarm | two DS18B20 probes on one pin, TON, OR, 128x64 OLED |
+| 11 Greenhouse | DHT22, fan/frost control, MAX with a feedback wire |
+| 12 WiFi and MQTT | WIFI, MQTT_CLIENT, MQTT_PUB/SUB (Home Assistant, Node-RED) |
+| 13 Phone control over BLE | BLE_UART, BT_SEND/BT_RECV: iPhone and Android apps |
+| 14 Bluetooth Classic serial | BT_SERIAL for Android and PCs, CTU reset from the phone |
+| 15 I2C registers - MPU-6050 | I2C_SCAN, I2C_READ, I2C_WRITE with any I2C chip |
+| 16 SPI thermocouple - MAX6675 | SPI_TRANSFER, DIV/MOD/TO_BOOL bit decoding |
+| 17 ideaspark TFT display | TFT block on the ideaspark ESP32 board's built-in 1.14" LCD |
+
 ## How it works
 
 ```

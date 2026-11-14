@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "name": "06 Car park counter",
+  "description": "An up/down counter (CTUD) counts cars in and out of a car park with 20 spaces. The FULL sign comes on at 20 cars; free spaces are calculated with SUB. A key switch resets the count.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DI",
+      "name": "CarIn",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "entry sensor"
+    },
+    {
+      "id": "b2",
+      "type": "DI",
+      "name": "CarOut",
+      "x": 80.0,
+      "y": 164.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO16",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "exit sensor"
+    },
+    {
+      "id": "b3",
+      "type": "DI",
+      "name": "ResetKey",
+      "x": 80.0,
+      "y": 268.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO17",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "CTUD",
+      "name": "Cars",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "PV": "20"
+      },
+      "params": {},
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": "counts rising edges"
+    },
+    {
+      "id": "b5",
+      "type": "DO",
+      "name": "FullSign",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "SUB",
+      "name": "FreeSpaces",
+      "x": 580.0,
+      "y": 144.0,
+      "values": {
+        "IN1": "20"
+      },
+      "params": {},
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "LE",
+      "name": "AlmostFull",
+      "x": 830.0,
+      "y": 190.0,
+      "values": {
+        "IN2": "2"
+      },
+      "params": {},
+      "type_args": {
+        "T": "INT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "DO",
+      "name": "AmberLamp",
+      "x": 1080.0,
+      "y": 190.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO26"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "2 or fewer spaces left"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "CU"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "CD"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "R"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "QU"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b4",
+        "port": "CV"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b7",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Counters react to the rising edge of CU/CD, so holding a sensor counts one car. QD is TRUE\nwhen the count is 0."
+    }
+  ]
+}

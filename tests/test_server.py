@@ -20,11 +20,15 @@ def test_library_projects_compile_export(tmp_path):
 
         projects = c.get("/api/projects").json()["projects"]
         examples = [p for p in projects if p["source"] == "example"]
-        assert len(examples) >= 3
+        assert len(examples) >= 17
         for ex in examples:
-            proj = c.get(f"/api/projects/example/{ex['name']}").json()
-            res = c.post("/api/compile", json={"project": proj}).json()
-            assert res["ok"], res["diagnostics"]
+            r = c.get(f"/api/projects/example/{ex['name']}")
+            assert r.status_code == 200, f"example '{ex['name']}' cannot be opened (file name characters?)"
+            proj = r.json()
+            assert proj["name"] == ex["name"]
+            for target in ("sim", "device"):
+                res = c.post("/api/compile", json={"project": proj, "target": target}).json()
+                assert res["ok"], (ex["name"], target, res["diagnostics"])
 
         proj["name"] = "My test"
         assert c.put("/api/projects/My test", json=proj).status_code == 200
