@@ -4,6 +4,8 @@ Graphical **function block diagram** programming for microcontrollers (ESP32
 first, with STM32 and others planned). It is modelled on IEC 61131-3 PLC
 programming and aimed at students, hobbyists and small industrial users.
 
+![FBD Studio editor with the tank level example](docs/images/editor.png)
+
 - **PLC-style blocks:** AND/OR/XOR/NOT, SR/RS, R_TRIG/F_TRIG, TON/TOF/TP,
   CTU/CTD/CTUD, comparisons, arithmetic, SEL/MUX/LIMIT/MAX/MIN, type
   conversions, and DI/DO/AI/PWM I/O.
@@ -16,7 +18,7 @@ programming and aimed at students, hobbyists and small industrial users.
   (incl. the built-in display of the ideaspark ESP32 1.14" board). Display lines are
   templates like `Temp {1:1} °C`. All drivers work step by step, so a slow
   sensor never stalls the scan cycle. MQTT runs in a
-  background task, so a slow network never stalls the scan cycle.
+  background task, so a slow network doesn't stall it either.
 - **Scan cycle semantics:** a fixed cycle time, data-flow execution order (shown
   on every block), and feedback loops that use the previous scan's value.
 - **Simulator:** runs the *same generated C++* on your PC. Toggle inputs, move
@@ -27,6 +29,19 @@ programming and aimed at students, hobbyists and small industrial users.
   C++ if you need to.
 - **Extensible:** your own blocks and boards are simple YAML files with C++
   snippets. See [docs/BLOCKS.md](docs/BLOCKS.md).
+
+## Screenshots
+
+**Simulation:** the program runs on your PC; values are shown live on every
+wire, and the AI slider in the properties panel stands in for the level sensor.
+
+![Tank level example running in the simulator](docs/images/simulation.png)
+
+**Display blocks and generated code:** a TFT text display on the ideaspark
+ESP32 board (pins filled in from the board definition), with the C++ that
+FBD Studio generates for it.
+
+![TFT display demo with block settings and generated C++ code](docs/images/tft-demo.png)
 
 ## Quick start
 
