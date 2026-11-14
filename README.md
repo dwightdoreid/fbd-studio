@@ -88,5 +88,12 @@ an input, check the timer delay and change a preset online.
 
 ## Status
 
-Version 0.1, the MVP. It has been tested in the simulator. Real ESP32
-hardware builds still need a PlatformIO toolchain run on your machine.
+Version 0.1. Tested on an ESP32 (ideaspark ESP32 with 1.14" LCD): upload via
+PlatformIO, serial live monitor with online changes, BLE serial with PIN
+pairing (Android), and the built-in TFT display. The I2C/SPI, WiFi/MQTT,
+sensor (BME280, DS18B20, DHT) and other display blocks build for ESP32 and run
+in the simulator, but have not been tried on real hardware yet.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
