@@ -152,5 +152,19 @@
       "y": -22.0,
       "text": "Try KP = 4 (it oscillates: the dead time limits the gain), TI = T#3s (overshoot), or TD =\nT#2s. Replace Process and Pipe by an AI block to control a real system."
     }
+  ],
+  "trend": [
+    {
+      "block": "b1",
+      "port": "OUT"
+    },
+    {
+      "block": "b4",
+      "port": "OUT"
+    },
+    {
+      "block": "b2",
+      "port": "OUT"
+    }
   ]
 }

@@ -245,5 +245,19 @@
       "y": -22.0,
       "text": "Sample rate 500 Hz (2 ms scan cycle), 256 samples: frequency resolution 2 Hz up to 250 Hz.\nRaise TestVibration.AMP above 0.71 (= 0.5 g RMS) to trigger the alarm in the simulator."
     }
+  ],
+  "trend": [
+    {
+      "block": "b5",
+      "port": "OUT"
+    },
+    {
+      "block": "b6",
+      "port": "BAND_RMS"
+    },
+    {
+      "block": "b9",
+      "port": "IN"
+    }
   ]
 }

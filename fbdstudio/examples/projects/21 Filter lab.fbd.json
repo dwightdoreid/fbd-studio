@@ -312,5 +312,23 @@
       "y": -38.0,
       "text": "The scan cycle is 5 ms, so the sample rate is 200 Hz and the highest visible frequency 100\nHz. Change FC, Q and the noise amplitude online. A filter's delay grows with its order and\nwith a lower FC."
     }
+  ],
+  "trend": [
+    {
+      "block": "b4",
+      "port": "OUT"
+    },
+    {
+      "block": "b5",
+      "port": "OUT"
+    },
+    {
+      "block": "b6",
+      "port": "OUT"
+    },
+    {
+      "block": "b7",
+      "port": "OUT"
+    }
   ]
 }

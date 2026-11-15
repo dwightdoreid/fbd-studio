@@ -1,5 +1,6 @@
 // FBD Studio web UI: palette, properties, toolbar, problems/output/code panels, online mode.
 import { Editor } from './editor.js';
+import { Scope } from './scope.js';
 import { categoryColor, expandAllowed, formatValue, resolvePorts, TYPE_COLORS, zeroValue } from './types.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -66,7 +67,7 @@ const S = {
 const editor = new Editor($('#canvas'), {
   def: (t) => S.lib.get(t),
   get widening() { return S.widening; },
-  onChange: () => { markDirty(); scheduleCompile(); updateCount(); checkOnlineDrift(); },
+  onChange: () => { markDirty(); scheduleCompile(); updateCount(); checkOnlineDrift(); scope.refresh(); },
   onSelect: () => renderProps(),
   onConnect: (w) => inferTypes(w),
   onSimToggle: (inst) => simToggle(inst),
@@ -83,6 +84,7 @@ function setProject(p, dirty = false) {
   if (S.online) stopOnline();
   S.project = p;
   p.settings ||= { cycle_ms: 10, monitor_ms: 200, baud: 115200 };
+  if (!Array.isArray(p.trend)) p.trend = [];
   editor.setProject(p);
   $('#project-name').value = p.name;
   S.dirty = dirty;
@@ -90,6 +92,7 @@ function setProject(p, dirty = false) {
   updateCount();
   if (S.lib) renderPalette();
   compileNow();
+  scope.refresh();
 }
 
 function markDirty() {
@@ -256,6 +259,76 @@ function markInvalidFields() {
   if (!sel) return;
   const bad = new Set((S.compile?.diagnostics || []).filter((d) => d.block === sel.id && d.port && d.level === 'error').map((d) => d.port));
   for (const [port, input] of S.propsRefs.inputs) input.classList.toggle('invalid', bad.has(port));
+}
+
+// ===================================================================== scope / trend
+// Plotted signals are stored in the project as {block, port}. A wired input shows the
+// value of the output it is connected to.
+function portsOf(inst) {
+  const def = S.lib.get(inst.type);
+  return def ? resolvePorts(inst, def) : { inputs: [], outputs: [] };
+}
+
+function signalSource(ref) {
+  const w = S.project.wires.find((x) => x.dst.block === ref.block && x.dst.port === ref.port);
+  return w ? w.src : ref;
+}
+
+function plotted(blockId, port) {
+  return (S.project.trend || []).some((r) => r.block === blockId && r.port === port);
+}
+
+function togglePlot(blockId, port) {
+  edit(() => {
+    const t = S.project.trend ||= [];
+    const i = t.findIndex((r) => r.block === blockId && r.port === port);
+    if (i >= 0) t.splice(i, 1); else t.push({ block: blockId, port });
+  }, true);
+  if (!plotted(blockId, port)) return;
+  showTab('scope');
+}
+
+const scope = new Scope($('#scope'), {
+  signals() {
+    const out = [];
+    for (const ref of S.project?.trend || []) {
+      const inst = editor.block(ref.block);
+      if (!inst) continue;
+      const { inputs, outputs } = portsOf(inst);
+      const p = [...outputs, ...inputs].find((x) => x.name === ref.port);
+      if (!p) continue;
+      const src = signalSource(ref);
+      out.push({ id: `${ref.block}:${ref.port}`, label: `${inst.name}.${ref.port}`, type: p.type,
+        key: `${src.block}:${src.port}`, sym: symbolFor(src.block, src.port)?.idx ?? null });
+    }
+    return out;
+  },
+  ports() {
+    const out = [];
+    for (const inst of S.project?.blocks || []) {
+      const { inputs, outputs } = portsOf(inst);
+      for (const p of outputs) out.push({ id: `${inst.id}:${p.name}`, label: `${inst.name}.${p.name}`, type: p.type });
+      for (const p of inputs) {
+        if (!S.project.wires.some((w) => w.dst.block === inst.id && w.dst.port === p.name)) {
+          out.push({ id: `${inst.id}:${p.name}`, label: `${inst.name}.${p.name}`, type: p.type });
+        }
+      }
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  },
+  add(id) { const [block, port] = id.split(':'); if (!plotted(block, port)) togglePlot(block, port); },
+  remove(id) { const [block, port] = id.split(':'); if (plotted(block, port)) togglePlot(block, port); },
+  online: () => !!S.online,
+  monitorMs: () => S.project?.settings?.monitor_ms,
+  startCapture: (req) => api('POST', '/api/capture', req),
+  cancelCapture: () => api('POST', '/api/capture/cancel'),
+  status: (t) => setStatus(t),
+});
+
+function plotButton(inst, port) {
+  const on = plotted(inst.id, port);
+  return h('button', { class: `plot-btn${on ? ' on' : ''}`, title: on ? 'Remove from the scope' : 'Plot in the scope',
+    onclick: () => togglePlot(inst.id, port) }, '📈');
 }
 
 // ===================================================================== properties panel
@@ -471,8 +544,8 @@ function renderBlockProps(el, inst) {
         S.propsRefs.inputs.set(p.name, inp);
         right = inp;
       }
-      el.append(h('div', { class: 'io-row' }, h('span', { class: 'name', title: p.def.description || p.name }, p.name),
-        h('span', { class: 'ty', style: { background: TYPE_COLORS[p.type] } }, p.type), right));
+      el.append(h('div', { class: 'io-row plot' }, h('span', { class: 'name', title: p.def.description || p.name }, p.name),
+        h('span', { class: 'ty', style: { background: TYPE_COLORS[p.type] } }, p.type), right, plotButton(inst, p.name)));
     }
   }
   if (outputs.length) {
@@ -480,8 +553,8 @@ function renderBlockProps(el, inst) {
     for (const p of outputs) {
       const live = h('span', { class: 'live' }, S.online ? formatValue(p.type, S.live?.get(`${inst.id}:${p.name}`)) : '');
       S.propsRefs.live.set(p.name, { span: live, type: p.type });
-      el.append(h('div', { class: 'io-row' }, h('span', { class: 'name', title: p.def.description || p.name }, p.name),
-        h('span', { class: 'ty', style: { background: TYPE_COLORS[p.type] } }, p.type), live));
+      el.append(h('div', { class: 'io-row plot' }, h('span', { class: 'name', title: p.def.description || p.name }, p.name),
+        h('span', { class: 'ty', style: { background: TYPE_COLORS[p.type] } }, p.type), live, plotButton(inst, p.name)));
     }
   }
   el.append(h('div', { class: 'actions' },
@@ -555,6 +628,7 @@ function onlineStarted(kind, res, extra = '') {
   pill.className = `pill ${kind === 'sim' ? 'sim' : 'online'}`;
   banner(kind === 'sim' ? 'SIMULATION — click DI switches to change inputs' : `ONLINE — ${extra}`);
   renderProps();
+  scope.refresh();
 }
 
 function stopOnline(text) {
@@ -572,6 +646,7 @@ function stopOnline(text) {
   banner(null);
   if (text) setStatus(text);
   renderProps();
+  scope.onOffline();
 }
 
 function banner(text, warn = false) {
@@ -668,8 +743,11 @@ function onEvent(ev) {
         if (id) ref.span.textContent = formatValue(ref.type, map.get(`${id}:${port}`));
       }
       $('#status-scan').textContent = `scan ${ev.scan_us} µs (max ${ev.scan_max_us} µs)`;
+      scope.onValues(ev.t, map);
       break;
     }
+    case 'capture_state': if (S.online) scope.onCaptureState(ev); break;
+    case 'capture': if (S.online) scope.onCapture(ev); break;
     case 'hello':
       if (!S.online) return;
       if (ev.match) { checkOnlineDrift(); if (S.online.kind === 'serial') setStatus('Board is running this program'); }
@@ -832,6 +910,29 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('beforeunload', (e) => { if (S.dirty) { saveDraft(); } });
+
+// ===================================================================== resizable bottom panel
+(function bottomResize() {
+  const set = (px) => document.body.style.setProperty('--bottom-h', `${Math.round(px)}px`);
+  const saved = storage('fbd.bottomH');
+  if (saved) set(Math.max(120, Math.min(window.innerHeight * 0.8, saved)));
+  const handle = $('#bottom-resize');
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const startY = e.clientY, startH = $('.bottom').getBoundingClientRect().height;
+    document.body.classList.add('resizing');
+    const move = (ev) => set(Math.max(120, Math.min(window.innerHeight * 0.8, startH + startY - ev.clientY)));
+    const up = () => {
+      document.body.classList.remove('resizing');
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      storage('fbd.bottomH', $('.bottom').getBoundingClientRect().height);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  });
+  handle.addEventListener('dblclick', () => { set(210); storage('fbd.bottomH', 210); });
+})();
 
 // ===================================================================== start
 (async function start() {

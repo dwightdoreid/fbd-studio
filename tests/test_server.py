@@ -72,3 +72,43 @@ def test_sim_over_http_and_websocket(tmp_path):
                 assert "values" in seen
         finally:
             c.post("/api/link/stop")
+
+
+def test_scope_capture_over_http_and_websocket(tmp_path):
+    with make_client(tmp_path) as c:
+        assert c.post("/api/capture", json={"channels": [0]}).status_code == 409  # not online
+        proj = c.get("/api/projects/example/21 Filter lab").json()
+        assert len(proj["trend"]) == 4  # the example comes with plotted signals
+        res = c.post("/api/sim/start", json={"project": proj}).json()
+        assert res["started"], res
+        try:
+            syms = res["compile"]["symbols"]
+            ids = {b["name"]: b["id"] for b in proj["blocks"]}
+            idx = next(s["idx"] for s in syms if s["block"] == ids["LowPass"] and s["port"] == "OUT")
+            assert c.post("/api/capture", json={"channels": [9999]}).status_code == 400
+            with c.websocket_connect("/ws") as ws:
+                r = c.post("/api/capture", json={"channels": [idx], "length": 100, "pre": 10, "trigger": idx, "edge": 1, "level": 50})
+                assert r.status_code == 200
+                states, cap = [], None
+                end = time.time() + 10
+                while time.time() < end and cap is None:
+                    ev = ws.receive_json()
+                    if ev["ev"] == "capture_state":
+                        states.append(ev["state"])
+                    elif ev["ev"] == "capture":
+                        cap = ev
+                assert cap, states
+                assert states[:2] == ["armed", "triggered"] and "receiving" in states
+                assert len(cap["data"][0]) == 100 and cap["pre"] == 10 and cap["channels"] == [idx]
+                assert cap["data"][0][9] < 50 <= cap["data"][0][10]
+        finally:
+            c.post("/api/link/stop")
+
+
+def test_project_keeps_scope_signals(tmp_path):
+    with make_client(tmp_path) as c:
+        proj = c.get("/api/projects/example/19 PID tuning with a simulated plant").json()
+        proj["name"] = "Scope test"
+        proj["trend"] = proj["trend"][:1]
+        assert c.put("/api/projects/Scope test", json=proj).status_code == 200
+        assert c.get("/api/projects/workspace/Scope test").json()["trend"] == proj["trend"]

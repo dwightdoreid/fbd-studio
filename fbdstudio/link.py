@@ -74,10 +74,55 @@ class Link:
         self.on_event = on_event
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._capture: dict | None = None  # capture data being received
+        self._capture_channels: list[int] = []
+
+    def _capture_line(self, line: str) -> None:
+        """Capture (scope) protocol lines: %A armed, %T triggered, %C header, %D sample, %E end."""
+        tag, rest = line[:2], line[2:].split()
+        try:
+            if tag == "%A":
+                self.on_event({"ev": "capture_state", "state": "armed", "len": int(rest[0]), "channels": int(rest[1])})
+            elif tag == "%T":
+                self.on_event({"ev": "capture_state", "state": "triggered"})
+            elif tag == "%C":
+                n, nch, period, pre = (int(x) for x in rest[:4])
+                self._capture = {"len": n, "period_us": period, "pre": pre, "data": [[] for _ in range(nch)]}
+                self.on_event({"ev": "capture_state", "state": "receiving", "len": n})
+            elif tag == "%D" and self._capture:
+                for col, v in zip(self._capture["data"], rest):
+                    f = float(v)
+                    col.append(f if math.isfinite(f) else None)
+            elif tag == "%E" and self._capture:
+                cap, self._capture = self._capture, None
+                cap["channels"] = self._capture_channels
+                self.on_event({"ev": "capture", **cap})
+        except (ValueError, IndexError):
+            self.on_event({"ev": "serial", "text": line})
+
+    def start_capture(self, channels: list[int], every: int = 1, length: int = 500, pre: int = 0,
+                      trigger: int = -1, edge: int = 1, level: float = 0.5) -> None:
+        if not channels or len(channels) > 8:
+            raise ValueError("choose 1 to 8 signals")
+        for i in [*channels, *([trigger] if trigger >= 0 else [])]:
+            if not 0 <= i < len(self.symbols):
+                raise ValueError(f"no signal with index {i}")
+        if not math.isfinite(level):
+            raise ValueError("the trigger level must be a number")
+        self._capture, self._capture_channels = None, list(channels)
+        self.send(f"C {int(every)} {int(length)} {int(pre)} {int(trigger)} {int(edge)} {float(level)!r} "
+                  + " ".join(str(int(c)) for c in channels))
+
+    def cancel_capture(self) -> None:
+        self._capture = None
+        self.send("C")
 
     def _emit_line(self, line: str) -> None:
         if not line.strip():
             return  # blank lines (e.g. from CR/LF differences) carry no information
+        if line.startswith("%"):
+            self._capture_line(line.rstrip("\r\n"))
+            return
         ev = parse_line(line, self.symbols)
         if ev["ev"] == "hello":
             ev["match"] = ev["hash"] == self.expected_hash

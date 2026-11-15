@@ -199,5 +199,15 @@
       "y": -20.0,
       "text": "Pump starts below 20 % and stops above 80 %. In the simulator, drag the AI slider in the properties panel."
     }
+  ],
+  "trend": [
+    {
+      "block": "b3",
+      "port": "OUT"
+    },
+    {
+      "block": "b7",
+      "port": "IN"
+    }
   ]
 }

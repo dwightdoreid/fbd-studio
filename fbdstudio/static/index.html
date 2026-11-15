@@ -64,10 +64,12 @@
   </main>
 
   <section class="bottom">
+    <div class="bottom-resize" id="bottom-resize" title="Drag to resize"></div>
     <nav class="tabs">
       <button data-tab="problems" class="active">Problems <span id="problem-count" class="badge"></span></button>
       <button data-tab="output">Output</button>
       <button data-tab="code">Generated code</button>
+      <button data-tab="scope" title="Plot signals over time (trend) or record them on every scan (capture)">Scope</button>
       <div class="spacer"></div>
       <button id="btn-clear-output" class="small" hidden>Clear</button>
       <button id="btn-copy-code" class="small" hidden>Copy</button>
@@ -76,6 +78,7 @@
       <div id="tab-problems" class="tab active"><ul id="problems" class="problems"></ul></div>
       <div id="tab-output" class="tab"><pre id="output" class="output"></pre></div>
       <div id="tab-code" class="tab"><pre id="code" class="code"></pre></div>
+      <div id="tab-scope" class="tab"><div id="scope" class="scope"></div></div>
     </div>
   </section>
 
@@ -123,6 +126,7 @@
         <li><b>Simulate</b> runs the exact generated code on your PC. Click the switches on DI blocks; use the slider in the properties panel for AI blocks.</li>
         <li><b>Upload</b> builds with PlatformIO and flashes the board on the selected serial port. <b>Monitor</b> then shows live values from the board.</li>
         <li>While online, you can change unconnected inputs (setpoints, timer presets) in the properties panel without re-uploading.</li>
+        <li>The <b>Scope</b> tab plots signals: click 📈 next to a value in the properties panel, or use “+ signal”. <b>Trend</b> plots the live values as they arrive; <b>Capture</b> records every scan on the board (or in the simulator), optionally from a trigger, for fast signals. Mouse wheel zooms, drag pans, double-click resets. Drag the top edge of the bottom panel to make it taller.</li>
         <li><b>Export…</b> gives you the generated PlatformIO project to continue in C++, or a <b>Modelica package</b> to test the program against a model of the machine in OpenModelica.</li>
       </ul>
       <h3>Keyboard / mouse</h3>

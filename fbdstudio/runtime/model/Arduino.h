@@ -55,6 +55,7 @@ struct ModelSerial {
   int read() { return -1; }
   void flush() {}
   size_t write(char) { return 1; }
+  int availableForWrite() { return 4096; }
   size_t print(const char*) { return 0; }
   size_t print(char) { return 0; }
   size_t print(int) { return 0; }

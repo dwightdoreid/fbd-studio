@@ -185,5 +185,23 @@
       "y": -22.0,
       "text": "Watch ET (elapsed time) count while simulating. PT can be changed online, e.g. T#500ms,\nT#1m30s."
     }
+  ],
+  "trend": [
+    {
+      "block": "b1",
+      "port": "Q"
+    },
+    {
+      "block": "b2",
+      "port": "Q"
+    },
+    {
+      "block": "b4",
+      "port": "Q"
+    },
+    {
+      "block": "b6",
+      "port": "Q"
+    }
   ]
 }

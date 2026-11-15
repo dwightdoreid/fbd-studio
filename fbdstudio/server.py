@@ -51,6 +51,16 @@ class WriteReq(BaseModel):
     value: Any
 
 
+class CaptureReq(BaseModel):
+    channels: list[int]  # symbol indexes
+    every: int = 1  # record every n-th scan
+    length: int = 500  # samples
+    pre: int = 0  # samples before the trigger
+    trigger: int = -1  # symbol index, -1 = start at once
+    edge: int = 1  # 1 rising, 2 falling, 3 both
+    level: float = 0.5
+
+
 class PinReq(BaseModel):
     kind: str
     pin: int
@@ -307,6 +317,22 @@ def create_app(workspace: Path) -> FastAPI:
             state.link.write_symbol(req.idx, req.value)
         except (ValueError, IndexError) as e:
             raise HTTPException(400, str(e))
+        return {"ok": True}
+
+    @app.post("/api/capture")
+    def capture_start(req: CaptureReq):
+        if not state.link:
+            raise HTTPException(409, "Not online: start the simulator or connect to the board first")
+        try:
+            state.link.start_capture(req.channels, req.every, req.length, req.pre, req.trigger, req.edge, req.level)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"ok": True}
+
+    @app.post("/api/capture/cancel")
+    def capture_cancel():
+        if state.link:
+            state.link.cancel_capture()
         return {"ok": True}
 
     @app.post("/api/sim/pin")

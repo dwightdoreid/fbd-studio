@@ -666,7 +666,7 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
 
 # ====================================================================== Modelica export
 
-MODEL_SYSTEM_INCLUDES = ["<stdint.h>", "<stddef.h>", "<stdlib.h>", "<string.h>", "<math.h>",
+MODEL_SYSTEM_INCLUDES = ["<stdint.h>", "<stddef.h>", "<stdio.h>", "<stdlib.h>", "<string.h>", "<math.h>",
                          "<limits>", "<type_traits>", "<new>"]
 
 

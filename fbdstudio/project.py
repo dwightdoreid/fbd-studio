@@ -55,3 +55,4 @@ class Project(BaseModel):
     blocks: list[BlockInstance] = Field(default_factory=list)
     wires: list[Wire] = Field(default_factory=list)
     notes: list[Note] = Field(default_factory=list)
+    trend: list[PortRef] = Field(default_factory=list)  # signals shown in the scope

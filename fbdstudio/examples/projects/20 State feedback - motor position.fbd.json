@@ -136,5 +136,19 @@
       "y": -38.0,
       "text": "Gains from lqr(A, B, Q, R) with A = [0 1; 0 -2], B = [0; 2], Q = diag(100, 0), R = 1: K =\n[10, 2.317]. KR = K1 gives zero steady-state error. For a real motor, wire an encoder\ncount and a speed estimate to X1 and X2."
     }
+  ],
+  "trend": [
+    {
+      "block": "b3",
+      "port": "OUT"
+    },
+    {
+      "block": "b2",
+      "port": "OUT"
+    },
+    {
+      "block": "b1",
+      "port": "OUT"
+    }
   ]
 }

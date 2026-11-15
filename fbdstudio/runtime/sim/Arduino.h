@@ -50,6 +50,7 @@ class SimSerial {
   int read();
   void flush();
   size_t write(char c);
+  int availableForWrite() { return 4096; }  // stdout never runs full
   size_t print(const char* s);
   size_t print(char c);
   size_t print(int v);

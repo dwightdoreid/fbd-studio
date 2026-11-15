@@ -40,6 +40,11 @@ programming and aimed at students, hobbyists and small industrial users.
   on every block), and feedback loops that use the previous scan's value.
 - **Simulator:** runs the *same generated C++* on your PC. Toggle inputs, move
   analog sliders and watch values live, with no hardware needed.
+- **Scope:** plot signals over time. *Trend* shows the live values from the
+  simulator or the board; *Capture* records chosen signals on every scan
+  (up to 8 signals, 4096 values), with a rising/falling trigger and
+  pre-trigger, for signals too fast for the monitor. Zoom, hover values and
+  CSV export. The plotted signals are saved with the project.
 - **Build & upload** through PlatformIO, then **monitor online** over USB
   serial. You can change setpoints and timer presets while the board runs.
 - **Readable code:** export the generated PlatformIO project and continue in
@@ -121,6 +126,37 @@ hardware named. Unless noted, examples are for a generic ESP32 DevKit.
 | 21 Filter lab | SIG_GEN signal + noise + hum; low-pass, notch, median filters, STATS, FFT |
 | 22 Vibration monitor - FFT | AI accelerometer at 500 Hz, FFT peak and band RMS, alarm |
 | 23 Tilt sensor - MPU-6050 | I2C readings, ATAN2, complementary filter of accelerometer and gyro |
+
+## Scope
+
+![Scope capture of the Filter lab example, triggered on the low-pass output](docs/images/scope.png)
+
+Open the **Scope** tab at the bottom and choose signals with **📈** next to a
+value in the properties panel (or **+ signal**). Then start the simulator or
+connect to the board.
+
+- **Trend** plots the values the program sends for online monitoring, one
+  point per *Update every* period (200 ms by default). Use it for slow
+  signals: temperatures, levels, a PID loop settling.
+- **Capture** records the signals on every scan (or every n-th) in the
+  program itself, so it sees fast signals at the full scan rate. A capture
+  can start at once or on a **trigger**: a signal crossing a level, rising or
+  falling, with part of the recording from before the trigger. The samples
+  are sent afterwards, a few lines per scan, so the scan cycle is not
+  disturbed. The buffer holds 4096 values (e.g. 4 signals × 1024 samples),
+  set by `PLC_CAPTURE_MAX` in `runtime/plcrt.h`. At 115200 baud a full
+  buffer takes about 4 s to arrive from an ESP32; a higher baud rate (project
+  settings) makes it faster.
+
+The mouse wheel zooms the time axis, dragging pans, double-click resets, and
+**CSV** downloads the data. Examples 03, 05, 19, 20, 21 and 22 come with
+signals already chosen. Example 21 *Filter lab* is a good start: capture with
+the trigger on `LowPass.OUT` rising through 50.
+
+Scans run on a fixed-rate schedule: they start every *cycle time* on
+average, even if one is late, so the sample rate seen by the capture and the
+DSP blocks is exact. On an ESP32 at a 5 ms cycle, 2000 captured scans were
+all exactly 5 ms apart, with online monitoring running.
 
 ## Testing with a plant model (Modelica)
 

@@ -137,27 +137,37 @@ struct Spectrum {
 // of amplitude A gives A), rms is the AC RMS value of the whole frame.
 inline Spectrum analyse(const float* x, int n, float fs, int win, float f_mag, float f_lo, float f_hi) {
   static float re[FFT_MAX], im[FFT_MAX];  // scratch shared by all FFT blocks (they run one after another)
+  // The window is computed only when n or the window type changes: double-precision
+  // cos() is done in software on an ESP32 and took most of the time.
+  static float wtab[FFT_MAX];
+  static int wtab_n = 0, wtab_win = -1;
+  static double wtab_sum2 = 0;
   Spectrum s;
   if (n > FFT_MAX) n = FFT_MAX;
-  double mean = 0, sum_w2 = 0;
+  if (n != wtab_n || win != wtab_win) {
+    wtab_sum2 = 0;
+    for (int i = 0; i < n; i++) { wtab[i] = window(win, i, n); wtab_sum2 += (double)wtab[i] * wtab[i]; }
+    wtab_n = n; wtab_win = win;
+  }
+  double mean = 0;
   for (int i = 0; i < n; i++) mean += x[i];
   mean /= n;
+  float m = (float)mean;
   for (int i = 0; i < n; i++) {
-    float w = window(win, i, n);
-    sum_w2 += (double)w * w;
-    re[i] = (float)((x[i] - mean) * w);
+    re[i] = (x[i] - m) * wtab[i];
     im[i] = 0.0f;
   }
   fft(re, im, n);
   s.dc = (float)mean;
-  double pow_scale = 2.0 / (n * sum_w2);    // |X_k|^2 -> mean square (Parseval with the window)
+  double pow_scale = 2.0 / (n * wtab_sum2);  // |X_k|^2 -> mean square (Parseval with the window)
   double df = fs / n, total = 0, band = 0;
+  float dff = (float)df;
   int half = n / 2, kmax = 1;
-  double pmax = -1.0;
+  float pmax = -1.0f;
   for (int k = 1; k < half; k++) {
-    double p = (double)re[k] * re[k] + (double)im[k] * im[k];
+    float p = re[k] * re[k] + im[k] * im[k];
     total += p;
-    double f = k * df;
+    float f = k * dff;
     if (f >= f_lo && f <= f_hi) band += p;
     if (p > pmax) { pmax = p; kmax = k; }
   }
