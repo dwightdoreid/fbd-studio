@@ -9,6 +9,14 @@ programming and aimed at students, hobbyists and small industrial users.
 - **PLC-style blocks:** AND/OR/XOR/NOT, SR/RS, R_TRIG/F_TRIG, TON/TOF/TP,
   CTU/CTD/CTUD, comparisons, arithmetic, SEL/MUX/LIMIT/MAX/MIN, type
   conversions, and DI/DO/AI/PWM I/O.
+- **Control blocks:** PID (anti-windup, filtered derivative, bumpless manual
+  mode), state feedback for LQR or pole-placement gains (with optional
+  integral action), lead-lag, PT1/PT2 lags, integrator, differentiator, dead
+  time, rate limiter/setpoint ramp, moving average, dead band, on/off control
+  with hysteresis, and a time-proportioning output for relays and SSRs. They
+  measure the actual time between scans, so they behave the same at any cycle
+  time. With PT1, PT2 and DEADTIME you can also simulate a simple process inside
+  the program and practise tuning without hardware.
 - **Communication blocks** where the board supports them: I2C (register
   read/write, bus scan), SPI transfer, WiFi, MQTT publish/subscribe (Home
   Assistant, Node-RED, …) and Bluetooth: classic serial for Android/PC, or
@@ -98,6 +106,9 @@ hardware named. Unless noted, examples are for a generic ESP32 DevKit.
 | 15 I2C registers - MPU-6050 | I2C_SCAN, I2C_READ, I2C_WRITE with any I2C chip |
 | 16 SPI thermocouple - MAX6675 | SPI_TRANSFER, DIV/MOD/TO_BOOL bit decoding |
 | 17 ideaspark TFT display | TFT block on the ideaspark ESP32 board's built-in 1.14" LCD |
+| 18 PID temperature control | DS18B20, PID, TPO pulses for a solid-state relay, manual mode |
+| 19 PID tuning with a simulated plant | PID, RAMP, PT1 + DEADTIME as a simulated process |
+| 20 State feedback - motor position | STATE_FB with LQR gains, simulated DC motor (PT1, INTEG) |
 
 ## Testing with a plant model (Modelica)
 

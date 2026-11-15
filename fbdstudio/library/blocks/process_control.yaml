@@ -1,0 +1,452 @@
+# Closed-loop control and signal-processing blocks.
+#
+# All time-dependent blocks measure the real time between two scans (micros()), so they
+# work for any scan cycle time, in the simulator and, with simulated time, in a Modelica
+# export. On the first scan the time step is 0: blocks initialise their state there.
+# Times are TIME values (e.g. T#10s); rates and gains are per second.
+blocks:
+  # ------------------------------------------------------------ controllers
+  - type: PID
+    category: Control
+    title: PID controller
+    description: >-
+      PID controller in standard (ISA) form OUT = KP * (e + 1/TI * integral(e) + TD * de/dt), with a
+      filtered derivative (time constant TD/N), output limits with anti-windup and bumpless manual mode.
+      TI = 0 disables the integral action, TD = 0 the derivative action. RST clears the integral part.
+    includes: ["<math.h>"]
+    inputs:
+      - {name: SP, type: REAL, description: Setpoint}
+      - {name: PV, type: REAL, description: Process value (measurement)}
+      - {name: KP, type: REAL, default: 1, description: Proportional gain}
+      - {name: TI, type: TIME, default: "T#10s", description: Integral time (0 = no integral action)}
+      - {name: TD, type: TIME, default: "T#0s", description: Derivative time (0 = no derivative action)}
+      - {name: N, type: REAL, default: 10, description: Derivative filter (filter time = TD/N)}
+      - {name: OUT_MIN, type: REAL, default: 0}
+      - {name: OUT_MAX, type: REAL, default: 100}
+      - {name: MAN, type: BOOL, description: Manual mode (OUT = MAN_OUT)}
+      - {name: MAN_OUT, type: REAL, description: Output in manual mode}
+      - {name: RST, type: BOOL, description: Reset the integral part}
+    params:
+      - name: action
+        kind: enum
+        options: {"e = SP - PV (heating, filling)": "1", "e = PV - SP (cooling, draining)": "-1"}
+        description: Direct or reverse acting
+      - {name: d_on_pv, kind: bool, default: true, description: "Derivative on the process value only (no kick on setpoint changes)"}
+    outputs:
+      - {name: OUT, type: REAL, description: Controller output}
+      - {name: ERR, type: REAL, description: Control error e}
+      - {name: SAT, type: BOOL, description: Output is at a limit}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: integ, type: REAL}
+      - {name: dterm, type: REAL}
+      - {name: prev_d, type: REAL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      float lo = OUT_MIN < OUT_MAX ? OUT_MIN : OUT_MAX;
+      float hi = OUT_MIN < OUT_MAX ? OUT_MAX : OUT_MIN;
+      float s = (float)action;
+      float e = s * (SP - PV);
+      float ti = TI * 0.001f, td = TD * 0.001f;
+      float din = d_on_pv ? -s * PV : e;
+      if (!started || RST) { prev_d = din; dterm = 0.0f; }
+      if (RST) integ = 0.0f;
+      started = true;
+      if (td <= 0.0f) dterm = 0.0f;
+      else if (dt > 0.0f) {
+        float tf = td / (N > 1.0f ? N : 1.0f);
+        dterm = (tf * dterm + KP * td * (din - prev_d)) / (tf + dt);
+      }
+      prev_d = din;
+      float p = KP * e;
+      float u;
+      if (MAN) {
+        u = MAN_OUT < lo ? lo : (MAN_OUT > hi ? hi : MAN_OUT);
+        integ = u - p - dterm;  // bumpless switch back to automatic
+        SAT = false;
+      } else {
+        if (ti > 0.0f && dt > 0.0f && !RST) {
+          float di = KP * dt / ti * e;
+          float un = p + integ + di + dterm;
+          // anti-windup: integrate only up to the output limit, never beyond
+          if (un > hi && di > 0.0f) { float m = hi - p - dterm; if (m > integ) integ = m; }
+          else if (un < lo && di < 0.0f) { float m = lo - p - dterm; if (m < integ) integ = m; }
+          else integ += di;
+        }
+        u = p + integ + dterm;
+        SAT = u >= hi || u <= lo;
+        if (u > hi) u = hi;
+        if (u < lo) u = lo;
+      }
+      if (!isfinite(u)) { u = lo; integ = 0.0f; dterm = 0.0f; }
+      OUT = u;
+      ERR = e;
+
+  - type: STATE_FB
+    category: Control
+    title: State feedback (LQR / pole placement)
+    description: >-
+      OUT = KR * R - (K1 * X1 + K2 * X2 + ...) + KI * integral(R - X1), limited to OUT_MIN..OUT_MAX.
+      Use it with gains from an LQR design or pole placement (e.g. Python control.lqr or MATLAB lqr).
+      X1 is the controlled output; KI > 0 adds integral action (LQI) to remove steady-state error.
+      Set the same number of X and K inputs (extra ones are ignored).
+    inputs:
+      - {name: R, type: REAL, description: Reference (setpoint for X1)}
+      - {name: X, type: REAL, variadic: {min: 1, max: 8, default: 2}, description: Measured or estimated state}
+      - {name: K, type: REAL, default: 0, variadic: {min: 1, max: 8, default: 2}, description: Feedback gain}
+      - {name: KR, type: REAL, default: 0, description: Reference gain (feed-forward)}
+      - {name: KI, type: REAL, default: 0, description: Integral gain on R - X1 (0 = none)}
+      - {name: OUT_MIN, type: REAL, default: -100}
+      - {name: OUT_MAX, type: REAL, default: 100}
+      - {name: RST, type: BOOL, description: Reset the integral part}
+    outputs:
+      - {name: OUT, type: REAL}
+      - {name: SAT, type: BOOL, description: Output is at a limit}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: integ, type: REAL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      started = true;
+      float lo = OUT_MIN < OUT_MAX ? OUT_MIN : OUT_MAX;
+      float hi = OUT_MIN < OUT_MAX ? OUT_MAX : OUT_MIN;
+      int n = X_n < K_n ? X_n : K_n;
+      float fb = 0.0f;
+      for (int i = 0; i < n; i++) fb += K[i] * X[i];
+      float base = KR * R - fb;
+      if (RST || KI == 0.0f) integ = 0.0f;
+      else if (dt > 0.0f) {
+        float di = KI * (R - X[0]) * dt;
+        float un = base + integ + di;
+        // anti-windup: integrate only up to the output limit, never beyond
+        if (un > hi && di > 0.0f) { float m = hi - base; if (m > integ) integ = m; }
+        else if (un < lo && di < 0.0f) { float m = lo - base; if (m < integ) integ = m; }
+        else integ += di;
+      }
+      float u = base + integ;
+      SAT = u >= hi || u <= lo;
+      OUT = u > hi ? hi : (u < lo ? lo : u);
+
+  - type: ONOFF
+    category: Control
+    title: On/off controller (hysteresis)
+    description: >-
+      Two-point controller. Heating: Q switches on when PV < SP - HYS/2 and off when PV > SP + HYS/2.
+      Cooling: the other way round.
+    inputs:
+      - {name: SP, type: REAL, description: Setpoint}
+      - {name: PV, type: REAL, description: Process value}
+      - {name: HYS, type: REAL, default: 1, description: Hysteresis band (total width)}
+    params:
+      - name: action
+        kind: enum
+        options: {"On below setpoint (heating)": "1", "On above setpoint (cooling)": "-1"}
+    outputs:
+      - {name: Q, type: BOOL}
+    cycle: |
+      float h = HYS < 0.0f ? -HYS * 0.5f : HYS * 0.5f;
+      float e = (float)action * (SP - PV);
+      if (e > h) Q = true;
+      else if (e < -h) Q = false;
+
+  - type: TPO
+    category: Control
+    title: Time-proportioning output
+    description: >-
+      Turns a controller output of 0..100 % into an on/off signal for a relay or SSR: within each
+      PERIOD, Q is on for IN % of the time. IN is read at the start of each period. Pulses shorter than
+      MIN_PULSE are skipped (and on-times close to the period become fully on).
+    inputs:
+      - {name: IN, type: REAL, description: Duty cycle in %}
+      - {name: PERIOD, type: TIME, default: "T#10s"}
+      - {name: MIN_PULSE, type: TIME, default: "T#0s", description: Shortest on or off pulse}
+      - {name: EN, type: BOOL, default: TRUE}
+    outputs:
+      - {name: Q, type: BOOL}
+    vars:
+      - {name: start, type: UDINT}
+      - {name: on_ms, type: UDINT}
+      - {name: running, type: BOOL}
+    cycle: |
+      uint32_t period = PERIOD < 1 ? 1 : (uint32_t)PERIOD;
+      uint32_t now = millis();
+      if (!EN) { running = false; Q = false; }
+      else {
+        if (!running || now - start >= period) {
+          start = running ? start + period : now;
+          if (now - start >= period) start = now;  // fell behind by more than a period
+          running = true;
+          float pct = IN < 0.0f ? 0.0f : (IN > 100.0f ? 100.0f : IN);
+          uint32_t on = (uint32_t)(pct * 0.01f * period + 0.5f);
+          uint32_t mp = MIN_PULSE < 0 ? 0 : (uint32_t)MIN_PULSE;
+          if (on < mp) on = 0;
+          if (period - on < mp) on = period;
+          on_ms = on;
+        }
+        Q = (now - start) < on_ms;
+      }
+
+  # ------------------------------------------------------------ dynamic elements / filters
+  - type: PT1
+    category: Filters
+    title: First-order lag (PT1 / low-pass)
+    description: >-
+      OUT follows K * IN with time constant T (T * dOUT/dt + OUT = K * IN). Use it as a low-pass filter
+      for noisy measurements or as a simple plant model. T = 0 passes K * IN through.
+    includes: ["<math.h>"]
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: K, type: REAL, default: 1, description: Gain}
+      - {name: T, type: TIME, default: "T#1s", description: Time constant}
+    params:
+      - {name: start_at_input, kind: bool, default: true, description: "Start at K * IN (otherwise at 0)"}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      float target = K * IN;
+      float t = T * 0.001f;
+      if (!started) { started = true; OUT = start_at_input ? target : 0.0f; }
+      if (t <= 0.0f) OUT = target;
+      else if (dt > 0.0f) OUT = target + (OUT - target) * expf(-dt / t);
+
+  - type: PT2
+    category: Filters
+    title: Second-order lag (PT2)
+    description: >-
+      T^2 * OUT'' + 2 * D * T * OUT' + OUT = K * IN. T is the time constant (1 / natural frequency),
+      D the damping (D < 1 oscillates, D = 1 is critically damped).
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: K, type: REAL, default: 1, description: Gain}
+      - {name: T, type: TIME, default: "T#1s", description: Time constant}
+      - {name: D, type: REAL, default: 0.7, description: Damping}
+    params:
+      - {name: start_at_input, kind: bool, default: true, description: "Start at rest at K * IN (otherwise at 0)"}
+    outputs:
+      - {name: OUT, type: REAL}
+      - {name: DOUT, type: REAL, description: Rate of change of OUT (per second)}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: u_prev, type: REAL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      float t = T * 0.001f;
+      float u = K * IN;
+      if (!started) { started = true; OUT = start_at_input ? u : 0.0f; DOUT = 0.0f; u_prev = u; }
+      if (t <= 0.0f) { OUT = u; DOUT = 0.0f; }
+      else if (dt > 0.0f) {
+        // trapezoidal (Tustin) step of x' = A x + B u: stable for any time step
+        float w2 = 1.0f / (t * t), dw = 2.0f * D / t, h = 0.5f * dt;
+        float a11 = 1.0f, a12 = -h, a21 = h * w2, a22 = 1.0f + h * dw;  // I - A h/2
+        float r1 = OUT + h * DOUT;
+        float r2 = DOUT + h * (-w2 * OUT - dw * DOUT) + h * w2 * (u + u_prev);
+        float det = a11 * a22 - a12 * a21;
+        OUT = (r1 * a22 - a12 * r2) / det;
+        DOUT = (a11 * r2 - a21 * r1) / det;
+      }
+      u_prev = u;
+
+  - type: LEAD_LAG
+    category: Filters
+    title: Lead-lag compensator
+    description: >-
+      OUT = K * (1 + T1 s) / (1 + T2 s) * IN. T1 > T2 gives phase lead (speeds up a loop),
+      T1 < T2 phase lag (more low-frequency gain). Starts in steady state (OUT = K * IN).
+    includes: ["<math.h>"]
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: K, type: REAL, default: 1, description: Gain}
+      - {name: T1, type: TIME, default: "T#1s", description: Lead time (numerator)}
+      - {name: T2, type: TIME, default: "T#100ms", description: Lag time (denominator)}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: x, type: REAL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      float t1 = T1 * 0.001f, t2 = T2 * 0.001f;
+      if (t2 <= 0.0f) { OUT = K * IN; x = 0.0f; started = true; }
+      else {
+        // OUT = K*T1/T2 * IN + x, where x is a lag (T2) of K * (1 - T1/T2) * IN
+        float r = t1 / t2;
+        float xin = K * (1.0f - r) * IN;
+        if (!started) { started = true; x = xin; }
+        else if (dt > 0.0f) x = xin + (x - xin) * expf(-dt / t2);
+        OUT = K * r * IN + x;
+      }
+
+  - type: INTEG
+    category: Filters
+    title: Integrator
+    description: OUT = Y0 + K * integral(IN dt), limited to OUT_MIN..OUT_MAX. RST sets OUT back to Y0.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: K, type: REAL, default: 1, description: Gain (per second)}
+      - {name: RST, type: BOOL, description: Reset OUT to Y0}
+      - {name: Y0, type: REAL, default: 0, description: Initial / reset value}
+      - {name: OUT_MIN, type: REAL, default: -1000000}
+      - {name: OUT_MAX, type: REAL, default: 1000000}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      if (!started || RST) OUT = Y0;
+      else OUT += K * IN * dt;
+      started = true;
+      float lo = OUT_MIN < OUT_MAX ? OUT_MIN : OUT_MAX;
+      float hi = OUT_MIN < OUT_MAX ? OUT_MAX : OUT_MIN;
+      if (OUT > hi) OUT = hi;
+      if (OUT < lo) OUT = lo;
+
+  - type: DT1
+    category: Filters
+    title: Differentiator (DT1)
+    description: >-
+      OUT = K * dIN/dt, filtered with time constant T (transfer function K s / (1 + T s)). A filter
+      time of a few scan cycles keeps measurement noise down.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: K, type: REAL, default: 1, description: Gain (seconds)}
+      - {name: T, type: TIME, default: "T#100ms", description: Filter time constant}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: prev, type: REAL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      if (!started) { started = true; prev = IN; OUT = 0.0f; }
+      float t = T * 0.001f;
+      if (t < 0.0f) t = 0.0f;
+      if (dt > 0.0f) OUT = (t * OUT + K * (IN - prev)) / (t + dt);
+      prev = IN;
+
+  - type: DEADTIME
+    category: Filters
+    title: Dead time (transport delay)
+    description: >-
+      OUT = IN delayed by T, e.g. for a conveyor or a long pipe, or in a Smith predictor. The delay is
+      stored in 64 steps of T/64.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: T, type: TIME, default: "T#1s", description: Delay}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: acc, type: REAL}
+      - {name: head, type: USINT}
+    members: |
+      float buf[64];
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      if (!started) { started = true; for (int i = 0; i < 64; i++) buf[i] = IN; head = 0; acc = 0.0f; }
+      float ts = T * 0.001f / 64.0f;
+      if (ts <= 0.0f) { OUT = IN; for (int i = 0; i < 64; i++) buf[i] = IN; acc = 0.0f; }
+      else {
+        acc += dt;
+        int k = 0;
+        while (acc >= ts && k < 64) { buf[head] = IN; head = (uint8_t)((head + 1) & 63); acc -= ts; k++; }
+        if (k == 64) acc = 0.0f;
+        OUT = buf[head];  // the oldest sample
+      }
+
+  - type: RAMP
+    category: Filters
+    title: Rate limiter / setpoint ramp
+    description: >-
+      OUT follows IN, but changes by at most UP per second when rising and DOWN per second when falling
+      (0 = no limit). Use it for soft starts and setpoint ramps. RST jumps to IN.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: UP, type: REAL, default: 10, description: Max. rise per second}
+      - {name: DOWN, type: REAL, default: 10, description: Max. fall per second}
+      - {name: RST, type: BOOL, description: Set OUT = IN}
+    outputs:
+      - {name: OUT, type: REAL}
+      - {name: BUSY, type: BOOL, description: Ramping (OUT has not reached IN)}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      if (!started || RST) OUT = IN;
+      started = true;
+      float d = IN - OUT;
+      float up = UP < 0.0f ? -UP : UP, dn = DOWN < 0.0f ? -DOWN : DOWN;
+      if (d > 0.0f) OUT = (up > 0.0f && d > up * dt) ? OUT + up * dt : IN;
+      else if (d < 0.0f) OUT = (dn > 0.0f && -d > dn * dt) ? OUT - dn * dt : IN;
+      BUSY = OUT != IN;
+
+  - type: MOV_AVG
+    category: Filters
+    title: Moving average
+    description: OUT = average of the last n values of IN (one per scan).
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: RST, type: BOOL, description: Restart the average}
+    params:
+      - {name: n, kind: int, default: 8, min: 1, max: 64, description: Number of samples}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: count, type: USINT}
+      - {name: head, type: USINT}
+      - {name: sum, type: REAL}
+    members: |
+      float buf[64];
+    cycle: |
+      if (RST) { count = 0; head = 0; sum = 0.0f; }
+      int len = n < 1 ? 1 : (n > 64 ? 64 : n);
+      if (count == len) sum -= buf[head];
+      else count++;
+      buf[head] = IN;
+      sum += IN;
+      head = (uint8_t)((head + 1) % len);
+      if (head == 0) { sum = 0.0f; for (int i = 0; i < count; i++) sum += buf[i]; }  // limit rounding drift
+      OUT = sum / count;
+
+  - type: DEADBAND
+    category: Filters
+    title: Dead band
+    description: OUT = 0 while |IN| <= DB, otherwise IN - DB (or IN + DB below zero), so OUT has no jump.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: DB, type: REAL, default: 1, description: Half width of the dead band}
+    outputs:
+      - {name: OUT, type: REAL}
+    cycle: |
+      float db = DB < 0.0f ? -DB : DB;
+      OUT = IN > db ? IN - db : (IN < -db ? IN + db : 0.0f);

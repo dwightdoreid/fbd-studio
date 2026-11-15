@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "name": "20 State feedback - motor position",
+  "description": "LQR state feedback positions a simulated DC motor: speed is a first-order lag of the voltage (PT1, 0.5 s), position is the integral of speed (INTEG). STATE_FB computes u = KR*R - K1*position - K2*speed with LQR gains.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 5,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "STATE_FB",
+      "name": "Lqr",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {
+        "R": "1.0",
+        "K1": "10.0",
+        "K2": "2.317",
+        "KR": "10.0",
+        "OUT_MIN": "-12.0",
+        "OUT_MAX": "12.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "R = target position (rad)"
+    },
+    {
+      "id": "b2",
+      "type": "PT1",
+      "name": "MotorSpeed",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "K": "1.0",
+        "T": "T#500ms"
+      },
+      "params": {
+        "start_at_input": false
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "rad/s per volt"
+    },
+    {
+      "id": "b3",
+      "type": "INTEG",
+      "name": "MotorAngle",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "rad"
+    },
+    {
+      "id": "b4",
+      "type": "PWM",
+      "name": "VoltageLED",
+      "x": 580.0,
+      "y": 300.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b1",
+        "port": "X1"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b1",
+        "port": "X2"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b1",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -38.0,
+      "text": "Gains from lqr(A, B, Q, R) with A = [0 1; 0 -2], B = [0; 2], Q = diag(100, 0), R = 1: K =\n[10, 2.317]. KR = K1 gives zero steady-state error. For a real motor, wire an encoder\ncount and a speed estimate to X1 and X2."
+    }
+  ]
+}

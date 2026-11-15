@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "name": "19 PID tuning with a simulated plant",
+  "description": "Learn PID tuning without hardware: the process is simulated inside the program by a first-order lag (PT1, 20 s) and a dead time (3 s). RAMP moves the setpoint smoothly. Run it in the simulator and change SP, KP and TI online.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "RAMP",
+      "name": "SetpointRamp",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {
+        "IN": "50.0",
+        "UP": "2.0",
+        "DOWN": "2.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "setpoint, changes by max. 2 per second"
+    },
+    {
+      "id": "b2",
+      "type": "PID",
+      "name": "Controller",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "KP": "1.5",
+        "TI": "T#15s",
+        "OUT_MIN": "0.0",
+        "OUT_MAX": "100.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b3",
+      "type": "PT1",
+      "name": "Process",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {
+        "K": "1.0",
+        "T": "T#20s"
+      },
+      "params": {
+        "start_at_input": false
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "simulated plant: lag 20 s"
+    },
+    {
+      "id": "b4",
+      "type": "DEADTIME",
+      "name": "Pipe",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {
+        "T": "T#3s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "and 3 s transport delay"
+    },
+    {
+      "id": "b5",
+      "type": "PWM",
+      "name": "OutputLED",
+      "x": 580.0,
+      "y": 260.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "LED brightness = controller output"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "SP"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "PV"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Try KP = 4 (it oscillates: the dead time limits the gain), TI = T#3s (overshoot), or TD =\nT#2s. Replace Process and Pipe by an AI block to control a real system."
+    }
+  ]
+}

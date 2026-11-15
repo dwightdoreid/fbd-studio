@@ -20,7 +20,7 @@ def test_library_projects_compile_export(tmp_path):
 
         projects = c.get("/api/projects").json()["projects"]
         examples = [p for p in projects if p["source"] == "example"]
-        assert len(examples) >= 17
+        assert len(examples) >= 20
         for ex in examples:
             r = c.get(f"/api/projects/example/{ex['name']}")
             assert r.status_code == 200, f"example '{ex['name']}' cannot be opened (file name characters?)"

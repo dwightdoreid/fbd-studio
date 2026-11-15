@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "name": "18 PID temperature control",
+  "description": "A PID controller holds an oven or a water bath at 60 °C. The DS18B20 temperature is the process value; the PID output (0..100 %) is turned into on/off pulses for a solid-state relay by TPO. A switch selects manual mode (heater off), and switching back is bumpless.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "DS18B20",
+      "name": "Probe",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "4.7 kOhm pull-up to 3.3 V"
+    },
+    {
+      "id": "b2",
+      "type": "DI",
+      "name": "Manual",
+      "x": 80.0,
+      "y": 200.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO16",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "switch: manual = heater off"
+    },
+    {
+      "id": "b3",
+      "type": "PID",
+      "name": "TempCtrl",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "SP": "60.0",
+        "KP": "8.0",
+        "TI": "T#2m",
+        "TD": "T#10s",
+        "MAN_OUT": "0.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "starting values: tune for your system"
+    },
+    {
+      "id": "b4",
+      "type": "TPO",
+      "name": "Pulses",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {
+        "PERIOD": "T#2s",
+        "MIN_PULSE": "T#50ms"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "0..100 % -> on/off within 2 s"
+    },
+    {
+      "id": "b5",
+      "type": "DO",
+      "name": "Heater",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "SSR input"
+    },
+    {
+      "id": "b6",
+      "type": "OR",
+      "name": "Fault",
+      "x": 580.0,
+      "y": 300.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "DO",
+      "name": "FaultLamp",
+      "x": 830.0,
+      "y": 300.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO26"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "NOT",
+      "name": "ProbeLost",
+      "x": 330.0,
+      "y": 344.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "T"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "PV"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b3",
+        "port": "MAN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b1",
+        "port": "OK"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b8",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b2",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -38.0,
+      "text": "Tuning: start with TD = 0 and a long TI, raise KP until the temperature starts to\noscillate, then halve it and shorten TI until the offset goes away quickly. SP, KP, TI and\nTD can be changed online."
+    }
+  ]
+}

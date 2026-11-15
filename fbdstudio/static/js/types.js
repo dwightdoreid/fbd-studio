@@ -8,7 +8,7 @@ const CATEGORY_COLORS = {
   'Bit logic': '#4a6fa5', 'Bistables': '#5b5fa8', 'Edge detection': '#6d5aa6',
   'Timers': '#b0662a', 'Counters': '#a8523f', 'Generators': '#9a6b1f',
   'Comparison': '#2b7f8a', 'Arithmetic': '#2e7d6b', 'Selection': '#3d7a46', 'Conversion': '#5f6b7a',
-  'I/O': '#2f7d4f',
+  'I/O': '#2f7d4f', 'Control': '#8a3f6b', 'Filters': '#7a4f8f',
 };
 
 export function categoryColor(def) {
