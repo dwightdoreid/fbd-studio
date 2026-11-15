@@ -763,14 +763,26 @@ async function openDialog() {
   }
 }
 
-async function exportZip() {
+async function exportZip(kind) {
+  $('#dlg-export').close();
+  const modelica = kind === 'modelica';
   try {
-    const blob = await api('POST', '/api/export', { project: S.project });
-    const a = h('a', { href: URL.createObjectURL(blob), download: `${S.project.name.replace(/[^A-Za-z0-9_\-]/g, '_')}.zip` });
+    if (modelica) setStatus('Building the Modelica package…');
+    const r = await fetch(modelica ? '/api/export/modelica' : '/api/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project: S.project }),
+    });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch { /* not json */ }
+      throw new Error(msg);
+    }
+    const m = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') || '');
+    const name = m ? m[1] : `${S.project.name.replace(/[^A-Za-z0-9_\-]/g, '_')}.zip`;
+    const a = h('a', { href: URL.createObjectURL(await r.blob()), download: name });
     document.body.append(a);
     a.click();
     a.remove();
-    setStatus('Exported PlatformIO project');
+    setStatus(modelica ? `Exported Modelica package ${name}: unzip it and open package.mo in OpenModelica` : 'Exported PlatformIO project');
   } catch (e) { setStatus(e.message); showTab('problems'); }
 }
 
@@ -788,7 +800,9 @@ $('#btn-stop').onclick = () => stopOnline('Stopped');
 $('#btn-build').onclick = () => build(false);
 $('#btn-upload').onclick = () => build(true);
 $('#btn-monitor').onclick = startMonitor;
-$('#btn-export').onclick = exportZip;
+$('#btn-export').onclick = () => $('#dlg-export').showModal();
+$('#export-pio').onclick = () => exportZip('pio');
+$('#export-modelica').onclick = () => exportZip('modelica');
 $('#btn-ports').onclick = refreshPorts;
 $('#port-select').onchange = (e) => storage('fbd.port', e.target.value);
 $('#btn-help').onclick = () => $('#dlg-help').showModal();

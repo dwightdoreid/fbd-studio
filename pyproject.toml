@@ -33,6 +33,7 @@ fbdstudio = [
     "library/boards/*.yaml",
     "runtime/*.h",
     "runtime/sim/*",
+    "runtime/model/*",
     "static/*.html",
     "static/css/*",
     "static/js/*",

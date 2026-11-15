@@ -53,6 +53,7 @@ blocks:
           Serial.println("BME280: sensors are not simulated (OK stays FALSE)");
         cycle: |
           OK = false;
+    model: {from_model: [T, H, P], cycle: "OK = true;"}
 
   - type: DS18B20
     category: Sensors
@@ -93,6 +94,7 @@ blocks:
           Serial.println("DS18B20: sensors are not simulated (OK stays FALSE)");
         cycle: |
           OK = false;
+    model: {from_model: [T], cycle: "OK = true;"}
 
   - type: DHT
     category: Sensors
@@ -132,3 +134,4 @@ blocks:
           Serial.println("DHT: sensors are not simulated (OK stays FALSE)");
         cycle: |
           OK = false;
+    model: {from_model: [T, H], cycle: "OK = true;"}

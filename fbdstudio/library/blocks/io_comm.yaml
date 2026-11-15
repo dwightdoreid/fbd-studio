@@ -37,6 +37,7 @@ blocks:
           Serial.println("I2C_BUS: I2C is not simulated (I2C blocks report OK = FALSE)");
         cycle: |
           OK = false;
+    model: {cycle: "OK = true;"}
 
   - type: I2C_READ
     category: I2C & SPI
@@ -81,6 +82,7 @@ blocks:
       if (OK) VALUE = plc_text::unpack(b, nbytes, msb_first != 0, signed_value);
     targets:
       sim: {includes: [], cycle: "OK = false;"}
+    model: {from_model: [VALUE], cycle: "OK = true;"}
 
   - type: I2C_WRITE
     category: I2C & SPI
@@ -142,6 +144,7 @@ blocks:
           DONE = false;
           if (REQ && !prev) ERR = true;
           prev = REQ;
+    model: {to_model: [VALUE], cycle: "DONE = false; ERR = false;"}
 
   - type: I2C_SCAN
     category: I2C & SPI
@@ -187,6 +190,8 @@ blocks:
           if ((EXEC && !prev) || (at_start && !started)) { COUNT = 0; FIRST = -1; }
           prev = EXEC; started = true;
 
+    model: {cycle: "COUNT = 0; FIRST = -1;"}
+
   # =================================================================== SPI
   - type: SPI_BUS
     category: I2C & SPI
@@ -209,6 +214,7 @@ blocks:
         includes: []
         init: |
           Serial.println("SPI_BUS: SPI is not simulated (SPI blocks return RX = 0)");
+    model: {}
 
   - type: SPI_TRANSFER
     category: I2C & SPI
@@ -281,6 +287,8 @@ blocks:
           DONE = REQ && !prev;
           prev = REQ;
 
+    model: {from_model: [RX], to_model: [TX], cycle: "DONE = false;"}
+
   # =================================================================== WiFi
   - type: WIFI
     category: WiFi & MQTT
@@ -335,6 +343,7 @@ blocks:
         cycle: |
           CONNECTED = false;
           RSSI = 0;
+    model: {cycle: "CONNECTED = true; RSSI = -50;"}
 
   - type: MQTT_CLIENT
     category: WiFi & MQTT
@@ -383,6 +392,7 @@ blocks:
         cycle: |
           CONNECTED = false;
           STATE = -1;
+    model: {cycle: "CONNECTED = true; STATE = 0;"}
 
   - type: MQTT_PUB
     category: WiFi & MQTT
@@ -431,6 +441,7 @@ blocks:
       last = now;
     targets:
       sim: {includes: [], init: "", cycle: ""}
+    model: {to_model: [VALUE]}
 
   - type: MQTT_SUB
     category: WiFi & MQTT
@@ -464,6 +475,14 @@ blocks:
       }
     targets:
       sim: {includes: [], init: "", cycle: "NEW = false;"}
+
+    model:
+      from_model: [VALUE]
+      vars: [{name: prev, type: T}, {name: seen, type: BOOL}]
+      cycle: |
+        NEW = seen && VALUE != prev;  // a changed model value counts as a new message
+        prev = VALUE;
+        seen = true;
 
   # =================================================================== Bluetooth
   - type: BT_SERIAL
@@ -500,6 +519,7 @@ blocks:
           Serial.println("BT_SERIAL: Bluetooth is not simulated (CONNECTED stays FALSE)");
         cycle: |
           CONNECTED = false;
+    model: {cycle: "CONNECTED = true;"}
 
   - type: BLE_UART
     category: Bluetooth
@@ -537,6 +557,7 @@ blocks:
           Serial.println("BLE_UART: Bluetooth is not simulated (CONNECTED stays FALSE)");
         cycle: |
           CONNECTED = false;
+    model: {cycle: "CONNECTED = true;"}
 
   - type: BT_SEND
     category: Bluetooth
@@ -586,6 +607,7 @@ blocks:
       last = now;
     targets:
       sim: {includes: [], init: "", cycle: ""}
+    model: {to_model: [VALUE]}
 
   - type: BT_RECV
     category: Bluetooth
@@ -619,3 +641,10 @@ blocks:
       }
     targets:
       sim: {includes: [], init: "", cycle: "NEW = false;"}
+    model:
+      from_model: [VALUE]
+      vars: [{name: prev, type: T}, {name: seen, type: BOOL}]
+      cycle: |
+        NEW = seen && VALUE != prev;  // a changed model value counts as a new message
+        prev = VALUE;
+        seen = true;

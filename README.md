@@ -27,6 +27,9 @@ programming and aimed at students, hobbyists and small industrial users.
   serial. You can change setpoints and timer presets while the board runs.
 - **Readable code:** export the generated PlatformIO project and continue in
   C++ if you need to.
+- **Modelica export:** test the program against a model of the machine or
+  process in OpenModelica (software in the loop). See
+  [Testing with a plant model](#testing-with-a-plant-model-modelica).
 - **Extensible:** your own blocks and boards are simple YAML files with C++
   snippets. See [docs/BLOCKS.md](docs/BLOCKS.md).
 
@@ -96,6 +99,48 @@ hardware named. Unless noted, examples are for a generic ESP32 DevKit.
 | 16 SPI thermocouple - MAX6675 | SPI_TRANSFER, DIV/MOD/TO_BOOL bit decoding |
 | 17 ideaspark TFT display | TFT block on the ideaspark ESP32 board's built-in 1.14" LCD |
 
+## Testing with a plant model (Modelica)
+
+**Export… → Modelica package** turns the diagram into a Modelica package with a
+`Controller` block. Put it into a model of your tank, conveyor or heating
+system in [OpenModelica](https://openmodelica.org/) and check the control
+behaviour before connecting real equipment.
+
+- The block runs the **same C++ as the microcontroller**, once per scan cycle
+  (`when sample(0, cycleTime)`). Timers count simulated time, so a 10-minute
+  test runs in seconds.
+- **Inputs and outputs:** DI → `BooleanInput` (the signal after *invert*),
+  AI → `RealInput` in % of full scale (quantised like the real ADC),
+  DO → `BooleanOutput`, PWM → `RealOutput` in %. Sensor values (BME280,
+  DS18B20, DHT) become `RealInput`s, and MQTT/Bluetooth values become inputs
+  and outputs. Bus, WiFi and display blocks report "OK/connected".
+- **Parameters:** every unconnected input of the diagram (setpoints, timer
+  presets, limits, …) is a parameter, so you can try other values without
+  exporting again. TIME values are in seconds.
+- The package contains a compiled library for your system
+  (`Resources/Library/linux64` or `win64`) and the C++ source with a build script
+  (`Resources/Source/build.sh` / `build.bat`) for other systems. Several
+  exported controllers can be used in one model.
+- `Example` in the package runs the controller with constant inputs: a quick
+  check that everything loads.
+
+Use it like this:
+
+```modelica
+model TankTest
+  Real level(start = 50, fixed = true) "% full";
+  TankLevel.Controller ctrl;   // exported from "03 Tank level"
+equation
+  ctrl.LevelSensor = level;
+  der(level) = (if ctrl.PumpOut then 10 else 0) - 2;
+end TankTest;
+```
+
+Simulated, the pump starts when the level falls to 20 % (t = 15 s) and stops
+at 80 % (t = 22.5 s), just like the program on the board. Requirements:
+OpenModelica with the Modelica Standard Library 4.x, and `g++`/`ar` on the
+PC that exports (the same compiler the simulator uses).
+
 ## How it works
 
 ```
@@ -113,6 +158,7 @@ diagram (JSON) ─► compiler.py ─► main.cpp + plcrt.h ─┬─► Platfor
 | `fbdstudio/compiler.py` | validation, execution order, C++ generation |
 | `fbdstudio/runtime/plcrt.h` | device runtime: scan timing, monitor protocol |
 | `fbdstudio/runtime/sim/` | Arduino API emulation for the simulator |
+| `fbdstudio/modelica.py`, `fbdstudio/runtime/model/` | Modelica export (package, library, Arduino shim with simulated time) |
 | `fbdstudio/server.py` | FastAPI REST + WebSocket server |
 | `fbdstudio/static/` | web UI (plain ES modules, no build step) |
 
@@ -125,7 +171,9 @@ diagram (JSON) ─► compiler.py ─► main.cpp + plcrt.h ─┬─► Platfor
 
 The tests compile every built-in block with every allowed data type
 (`g++ -std=c++11`). They also run a simulated program end to end: they press
-an input, check the timer delay and change a preset online.
+an input, check the timer delay and change a preset online. If OpenModelica
+(`omc`) is installed, every example is also exported as a Modelica package
+and simulated, including the tank example against a tank model.
 
 ## Status
 

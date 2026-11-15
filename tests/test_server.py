@@ -41,6 +41,13 @@ def test_library_projects_compile_export(tmp_path):
         assert {"My_test/platformio.ini", "My_test/src/main.cpp", "My_test/include/plcrt.h"} <= names
         assert "board = esp32dev" in z.read("My_test/platformio.ini").decode()
 
+        r = c.post("/api/export/modelica", json={"project": proj})
+        assert r.status_code == 200, r.text
+        assert 'filename="MyTest.zip"' in r.headers["content-disposition"]
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        assert "MyTest/package.mo" in z.namelist()
+        assert any(n.startswith("MyTest/Resources/Library/") and n.endswith("libfbd_MyTest.a") for n in z.namelist())
+
         assert c.delete("/api/projects/My test").status_code == 200
 
 

@@ -74,6 +74,20 @@ class CodeOverride(BaseModel):
     cycle: Optional[str] = None
 
 
+class ModelIO(BaseModel):
+    """How a hardware block appears in a Modelica export (see docs/BLOCKS.md).
+
+    In the export the block's normal init/cycle code is replaced: 'from_model' outputs
+    are set from Modelica inputs, 'to_model' inputs are sent to Modelica outputs, and the
+    optional init/cycle code here runs instead (e.g. to set OK = true).
+    """
+    from_model: list[str] = Field(default_factory=list)  # block outputs that become Modelica inputs
+    to_model: list[str] = Field(default_factory=list)  # block inputs that become Modelica outputs
+    vars: list[VarDef] = Field(default_factory=list)  # extra state for the cycle code below
+    init: str = ""
+    cycle: str = ""
+
+
 class BlockDef(BaseModel):
     type: str
     category: str = "User"
@@ -97,6 +111,7 @@ class BlockDef(BaseModel):
     singleton: bool = False  # at most one instance per program
     platformio: dict[str, str] = Field(default_factory=dict)  # extra platformio.ini options
     targets: dict[str, CodeOverride] = Field(default_factory=dict)
+    model: Optional[ModelIO] = None  # Modelica export behaviour of hardware blocks
     source: str = "builtin"  # filled by the loader
 
     @model_validator(mode="after")
@@ -140,6 +155,15 @@ class BlockDef(BaseModel):
                 raise ValueError(f"var {v.name}: unknown type '{v.type}'")
             if v.init is not None and v.type in T.C_TYPES:
                 T.parse_value(v.type, v.init)
+        if self.model:
+            outs = {p.name for p in self.outputs}
+            ins = {p.name: p for p in self.inputs}
+            for name in self.model.from_model:
+                if name not in outs:
+                    raise ValueError(f"model.from_model: '{name}' is not an output")
+            for name in self.model.to_model:
+                if name not in ins or ins[name].variadic:
+                    raise ValueError(f"model.to_model: '{name}' is not a (non-variadic) input")
         for p in self.params:
             if p.kind == "enum":
                 if not p.options:
@@ -155,6 +179,8 @@ class BlockDef(BaseModel):
         return self
 
     def code_for(self, target: str) -> dict[str, Any]:
+        if target == "model" and self.model is not None:
+            return {"includes": [], "globals": "", "members": "", "init": self.model.init, "cycle": self.model.cycle}
         code = {"includes": self.includes, "globals": self.globals, "members": self.members,
                 "init": self.init, "cycle": self.cycle}
         override = self.targets.get(target)

@@ -14,3 +14,8 @@ def library():
 @pytest.fixture(scope="session")
 def board():
     return Boards().get("esp32dev")
+
+
+@pytest.fixture(scope="session")
+def boards():
+    return Boards()

@@ -20,6 +20,7 @@ blocks:
       pinMode(pin, mode);
     cycle: |
       Q = (digitalRead(pin) == HIGH) != invert;
+    model: {from_model: [Q]}  # Modelica: Boolean input, the signal after 'invert'
 
   - type: DO
     category: I/O
@@ -36,6 +37,7 @@ blocks:
       digitalWrite(pin, invert ? HIGH : LOW);
     cycle: |
       digitalWrite(pin, (IN != invert) ? HIGH : LOW);
+    model: {to_model: [IN]}  # Modelica: Boolean output (before 'invert')
 
   - type: AI
     category: I/O
@@ -50,6 +52,12 @@ blocks:
     cycle: |
       RAW = (int16_t)analogRead(pin);
       PCT = RAW * 100.0f / PLC_ADC_MAX;
+    model:  # Modelica: Real input in % of full scale; quantised like the real ADC
+      from_model: [PCT]
+      cycle: |
+        float p = PCT < 0.0f ? 0.0f : (PCT > 100.0f ? 100.0f : PCT);
+        RAW = (int16_t)(p * PLC_ADC_MAX / 100.0f + 0.5f);
+        PCT = RAW * 100.0f / PLC_ADC_MAX;
 
   - type: PWM
     category: I/O
@@ -65,3 +73,4 @@ blocks:
     cycle: |
       float d = IN < 0.0f ? 0.0f : (IN > 100.0f ? 100.0f : IN);
       analogWrite(pin, (int)(d * 2.55f + 0.5f));
+    model: {to_model: [IN]}  # Modelica: Real output, duty cycle in %

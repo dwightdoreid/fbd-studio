@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from . import builder
+from . import builder, modelica
 from .blocks import Library
 from .boards import Boards
 from .compiler import compile_project
@@ -203,6 +203,20 @@ def create_app(workspace: Path) -> FastAPI:
         data = builder.zip_pio_project(name, board, res, project.settings.baud)
         return Response(data, media_type="application/zip",
                         headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
+
+    @app.post("/api/export/modelica")
+    def api_export_modelica(req: CompileReq):
+        project = parse_project(req.project)
+        res, _ = compile_(project, "model")
+        if not res.ok:
+            msgs = [d.message for d in res.diagnostics if d.level == "error"]
+            raise HTTPException(400, "Cannot export to Modelica: " + "; ".join(msgs[:3]))
+        try:
+            pkg, data = modelica.zip_package(project, res)
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="{pkg}.zip"'})
 
     @app.post("/api/build")
     async def api_build(req: BuildReq):

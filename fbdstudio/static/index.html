@@ -35,7 +35,7 @@
       <button id="btn-build" title="Compile for the board with PlatformIO">Build</button>
       <button id="btn-upload" title="Compile and upload to the board">Upload</button>
       <button id="btn-monitor" title="Connect to the board and watch live values">Monitor</button>
-      <button id="btn-export" title="Download the generated PlatformIO project (.zip)">Export</button>
+      <button id="btn-export" title="Download the program as a PlatformIO project or a Modelica package">Export…</button>
     </div>
     <div class="spacer"></div>
     <button id="btn-help" title="Help and keyboard shortcuts">?</button>
@@ -94,6 +94,15 @@
     <div class="dialog-actions"><button value="cancel" formmethod="dialog" onclick="this.closest('dialog').close()">Close</button></div>
   </dialog>
 
+  <dialog id="dlg-export" class="dialog">
+    <h2>Export</h2>
+    <div class="open-list">
+      <div class="open-item export-item" id="export-pio"><span class="n"><b>PlatformIO project</b><br><span class="d">The generated C++ project, to build and change outside FBD Studio.</span></span></div>
+      <div class="open-item export-item" id="export-modelica"><span class="n"><b>Modelica package</b><br><span class="d">A controller block for OpenModelica: test the program against a model of the machine or process (software in the loop). Inputs, outputs and constants become connectors and parameters.</span></span></div>
+    </div>
+    <div class="dialog-actions"><button onclick="this.closest('dialog').close()">Close</button></div>
+  </dialog>
+
   <dialog id="dlg-help" class="dialog wide">
     <h2>FBD Studio — quick help</h2>
     <div class="help">
@@ -114,7 +123,7 @@
         <li><b>Simulate</b> runs the exact generated code on your PC. Click the switches on DI blocks; use the slider in the properties panel for AI blocks.</li>
         <li><b>Upload</b> builds with PlatformIO and flashes the board on the selected serial port. <b>Monitor</b> then shows live values from the board.</li>
         <li>While online, you can change unconnected inputs (setpoints, timer presets) in the properties panel without re-uploading.</li>
-        <li><b>Export</b> gives you the generated PlatformIO project to continue in C++ if you want.</li>
+        <li><b>Export…</b> gives you the generated PlatformIO project to continue in C++, or a <b>Modelica package</b> to test the program against a model of the machine in OpenModelica.</li>
       </ul>
       <h3>Keyboard / mouse</h3>
       <table class="keys">

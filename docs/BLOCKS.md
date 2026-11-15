@@ -73,6 +73,7 @@ then calls `cycle()`. Outputs keep their values between scans, and so do
 | `excludes_blocks` | Block types that cannot be in the same program, e.g. `[BT_SERIAL]`. |
 | `singleton` | `true`: at most one instance per program (bus or connection settings). |
 | `platformio` | Extra `platformio.ini` options, e.g. `{board_build.partitions: huge_app.csv}`. |
+| `model` | How a hardware block appears in a Modelica export (see below). |
 
 ### Types
 
@@ -159,6 +160,27 @@ cycle: |
 MQTT networking runs in its own FreeRTOS task (`plc_mqtt.h`), so a block
 never waits for the network. Never print to `Serial` from another task: it
 would mix with the monitor protocol.
+
+### Modelica export (`model`)
+
+In a Modelica export, a block's normal code runs unchanged, with `millis()`
+following the simulation time, but there is no hardware. Blocks that touch
+hardware therefore say what they become:
+
+```yaml
+model:
+  from_model: [T, H]   # outputs set from Modelica inputs (Real/Boolean/Integer)
+  to_model: [IN]       # inputs sent to Modelica outputs
+  vars: [{name: prev, type: T}]   # extra state for the code below (optional)
+  init: ""             # replaces init (optional)
+  cycle: "OK = true;"  # replaces cycle: runs after the from_model values are set
+```
+
+With a `model` section, the block's `init`, `cycle`, `members` and `includes`
+are not used in the export. A block with only one connector is named after the
+instance (`Start`); otherwise the port name is added (`Climate_T`). A block
+with a `sim` target but no `model` section cannot be exported (you get an error
+telling you so). Pure logic blocks need nothing.
 
 ### Rules of thumb
 

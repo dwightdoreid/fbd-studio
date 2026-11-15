@@ -82,6 +82,7 @@ class CompileResult:
     symbols: list[dict] = field(default_factory=list)
     lib_deps: list[str] = field(default_factory=list)
     platformio: dict[str, str] = field(default_factory=dict)  # extra platformio.ini options from blocks
+    model: Optional[dict] = None  # target "model": Modelica connectors and parameters (see modelica.py)
 
     @property
     def ok(self) -> bool:
@@ -163,7 +164,7 @@ def _param_c_value(r: Resolved, pdef, board: Optional[BoardDef], target: str, di
         if pin.warn and pin.note and not intended:
             diags.append(Diagnostic("warning", f"{where}: {pin.id}: {pin.note}", inst.id, port=pdef.name))
         pins_used.setdefault(pin.id, []).append((inst, pdef.capability, pdef.shared))
-        return str(board.pin_index(pin.id)) if target == "sim" else pin.c
+        return str(board.pin_index(pin.id)) if target in ("sim", "model") else pin.c
     if pdef.kind == "enum":
         if raw not in pdef.options:
             diags.append(Diagnostic("error", f"{where}: '{raw}' is not one of {', '.join(pdef.options)}", inst.id, port=pdef.name))
@@ -453,9 +454,19 @@ def compile_project(project: Project, library: Library, board: Optional[BoardDef
             w.dst.block, wid,
         ))
 
+    if target == "model":
+        for r in resolved.values():
+            if r.bdef.model is None and "sim" in r.bdef.targets:
+                diags.append(Diagnostic(
+                    "error", f"{r.inst.name}: {r.bdef.type} cannot be used in a Modelica export "
+                    "(the block has no 'model:' section)", r.inst.id))
+
     if not res.ok or board is None:
         return res
 
+    if target == "model":
+        _generate_model(res, project, board, resolved, order, wired, set(feedback), param_values, const_values)
+        return res
     _generate(res, project, board, target, resolved, order, wired, set(feedback), param_values, const_values)
     return res
 
@@ -489,9 +500,12 @@ def _struct(bdef: BlockDef, target: str) -> str:
         lines.append("  // outputs")
         for p in bdef.outputs:
             lines.append(f"  {c_type(p.type, tps)} {p.name}{{}};")
-    if bdef.vars:
+    vars_ = list(bdef.vars)
+    if target == "model" and bdef.model is not None:
+        vars_ += bdef.model.vars
+    if vars_:
         lines.append("  // internal state")
-        for v in bdef.vars:
+        for v in vars_:
             ct = c_type(v.type, tps)
             if v.init is None:
                 lines.append(f"  {ct} {v.name}{{}};")
@@ -648,3 +662,212 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
     for sym in symbols:
         sym.pop("c")
     res.symbols = symbols
+
+
+# ====================================================================== Modelica export
+
+MODEL_SYSTEM_INCLUDES = ["<stdint.h>", "<stddef.h>", "<stdlib.h>", "<string.h>", "<math.h>",
+                         "<limits>", "<type_traits>", "<new>"]
+
+
+def _model_from_double(type_name: str, expr: str) -> str:
+    """C++ expression converting a Modelica Real to an IEC type."""
+    if type_name == "BOOL":
+        return f"({expr} > 0.5)"
+    if type_name == "REAL":
+        return f"(float)({expr})"
+    if type_name == "TIME":  # Modelica side: seconds
+        return f"plc::conv<int32_t>(({expr}) * 1000.0)"
+    return f"plc::conv<{T.C_TYPES[type_name]}>({expr})"
+
+
+def _model_to_double(type_name: str, expr: str) -> str:
+    if type_name == "BOOL":
+        return f"({expr} ? 1.0 : 0.0)"
+    if type_name == "TIME":
+        return f"(double)({expr}) / 1000.0"
+    return f"(double)({expr})"
+
+
+def _model_value(type_name: str, raw) -> Any:
+    """Python value of a constant as Modelica sees it (TIME in seconds)."""
+    v = T.parse_value(type_name, raw)
+    return v / 1000.0 if type_name == "TIME" else v
+
+
+def _generate_model(res, project, board, resolved, order, wired, feedback, param_values, const_values):
+    """C++ for the Modelica export: the program as a struct plus a C API.
+
+    extern "C" fbd_<id>_new(cycle_s, params, n) / _step(h, time_s, u, nu, y, ny) / _free(h).
+    u, y and params are Real vectors; the order is recorded in res.model.
+    """
+    used_types: list[BlockDef] = []
+    for bid in order:
+        if resolved[bid].bdef not in used_types:
+            used_types.append(resolved[bid].bdef)
+    sys_includes = list(MODEL_SYSTEM_INCLUDES)
+    local_includes: list[str] = []
+    globals_: list[str] = []
+    for bdef in used_types:
+        code = bdef.code_for("model")
+        for inc in code["includes"]:
+            inc = inc if inc.startswith(("<", '"')) else f"<{inc}>"
+            target_list = sys_includes if inc.startswith("<") else local_includes
+            if inc not in target_list:
+                target_list.append(inc)
+        if code["globals"].strip():
+            globals_.append(f"// globals of {bdef.type}\n{textwrap.dedent(code['globals']).strip()}")
+
+    inputs: list[dict] = []  # Modelica inputs, in u[] order
+    outputs: list[dict] = []  # Modelica outputs, in y[] order
+    params: list[dict] = []  # Modelica parameters (unwired inputs of logic blocks), in p[] order
+
+    def describe(r: Resolved) -> str:
+        pins = [f"{k} {v}" for k, v in r.inst.params.items()
+                if any(p.name == k and p.kind == "pin" for p in r.bdef.params) and v]
+        text = r.bdef.type + (f" ({', '.join(pins)})" if pins else "")
+        return text + (f": {r.inst.comment}" if r.inst.comment else "")
+
+    by_position = sorted(order, key=lambda b: (resolved[b].inst.y, resolved[b].inst.x))  # icon follows the diagram
+    for bid in by_position:
+        r = resolved[bid]
+        m = r.bdef.model
+        if m is not None:
+            n_io = len(m.from_model) + len(m.to_model)
+            for port in m.from_model:
+                p = r.outputs[port]
+                inputs.append({"name": r.inst.name if n_io == 1 else f"{r.inst.name}_{port}", "type": p.type,
+                               "block": bid, "port": port, "c": f"{r.inst.name}.{p.member()}", "description": describe(r)})
+            for port in m.to_model:
+                p = r.inputs[port]
+                outputs.append({"name": r.inst.name if n_io == 1 else f"{r.inst.name}_{port}", "type": p.type,
+                                "block": bid, "port": port, "c": f"{r.inst.name}.{p.member()}", "description": describe(r)})
+        else:
+            for pname, port in r.inputs.items():
+                if (bid, pname) in wired:
+                    continue
+                raw = r.inst.values.get(pname)
+                if raw is None or raw == "":
+                    raw = port.default if port.default is not None else T.zero_value(port.type)
+                params.append({"name": f"{r.inst.name}_{pname}", "type": port.type, "value": _model_value(port.type, raw),
+                               "block": bid, "port": pname, "c": f"{r.inst.name}.{port.member()}",
+                               "description": f"{r.inst.name} ({r.bdef.type}) input {pname}"})
+
+    out: list[str] = []
+    out.append(f"// Generated by FBD Studio from project \"{project.name}\" for a Modelica export.")
+    out.append("// The PLC program runs once per scan cycle, called from Modelica (see package.mo).")
+    for inc in sys_includes:
+        out.append(f"#include {inc}")
+    out.append("")
+    out.append("namespace {  // internal linkage: several exported programs can live in one model")
+    out.append('#include "Arduino.h"')
+    out.append(f"#ifndef PLC_ADC_MAX\n#define PLC_ADC_MAX {board.adc_max}\n#endif")
+    out.append('#include "plcrt.h"')
+    for inc in local_includes:
+        out.append(f"#include {inc}")
+    out.append("")
+    if globals_:
+        out.extend(globals_)
+        out.append("")
+    out.append("// ================================================================ block types")
+    for bdef in used_types:
+        out.append(_struct(bdef, "model"))
+        out.append("")
+
+    out.append("// ================================================================ program")
+    out.append("struct Program {")
+    for bid in order:
+        r = resolved[bid]
+        tmpl = ""
+        if r.bdef.type_params:
+            tmpl = "<" + ", ".join(T.C_TYPES[r.type_args[t]] for t in r.bdef.type_params) + ">"
+        comment = f"  // {r.inst.comment}" if r.inst.comment else ""
+        out.append(f"  FB_{r.bdef.type}{tmpl} {r.inst.name};{comment}")
+    out.append("")
+    out.append("  void fbd_init(const double* p) {")
+    param_of = {(q["block"], q["port"]): i for i, q in enumerate(params)}
+    for bid in order:
+        r = resolved[bid]
+        out.append(f"    // {r.inst.name} ({r.bdef.type})")
+        for name, val in param_values[bid].items():
+            out.append(f"    {r.inst.name}.{name} = {val};")
+        for base, n in r.counts.items():
+            out.append(f"    {r.inst.name}.{base}_n = {n};")
+        for pname, lit in const_values[bid].items():
+            port = r.inputs[pname]
+            k = param_of.get((bid, pname))
+            val = lit if k is None else _model_from_double(port.type, f"p[{k}]")
+            out.append(f"    {r.inst.name}.{port.member()} = {val};")
+        out.append(f"    {r.inst.name}.init();")
+    out.append("  }")
+    out.append("")
+    out.append("  void fbd_step(const double* u, double* y) {")
+    in_of = {(q["block"], q["port"]): i for i, q in enumerate(inputs)}
+    out_of = {(q["block"], q["port"]): i for i, q in enumerate(outputs)}
+    for n, bid in enumerate(order, 1):
+        r = resolved[bid]
+        out.append(f"    // [{n}] {r.inst.name} ({r.bdef.type})")
+        for pname, port in r.inputs.items():
+            src = wired.get((bid, pname))
+            if not src:
+                continue
+            sres, sport, wid = src
+            expr = f"{sres.inst.name}.{sport.member()}"
+            if sport.type != port.type:
+                expr = f"({T.C_TYPES[port.type]}){expr}"
+            fb = "  // feedback: value from previous scan" if wid in feedback else ""
+            out.append(f"    {r.inst.name}.{port.member()} = {expr};{fb}")
+        for pname, port in r.outputs.items():
+            k = in_of.get((bid, pname))
+            if k is not None:
+                out.append(f"    {r.inst.name}.{port.member()} = {_model_from_double(port.type, f'u[{k}]')};  // from Modelica")
+        out.append(f"    {r.inst.name}.cycle();")
+        for pname, port in r.inputs.items():
+            k = out_of.get((bid, pname))
+            if k is not None:
+                out.append(f"    y[{k}] = {_model_to_double(port.type, f'{r.inst.name}.{port.member()}')};  // to Modelica")
+    out.append("  }")
+    out.append("};")
+    out.append("}  // namespace")
+    out.append("")
+    out.append("#if defined(_WIN32)")
+    out.append('#define FBD_API extern "C" __declspec(dllexport)')
+    out.append("#else")
+    out.append('#define FBD_API extern "C" __attribute__((visibility("default")))')
+    out.append("#endif")
+    out.append("")
+    out.append(f"static const int FBD_NU = {len(inputs)}, FBD_NY = {len(outputs)}, FBD_NP = {len(params)};")
+    out.append("")
+    out.append("static void fbd_set_time(double t) { fbd_now_us = t > 0 ? (uint64_t)(t * 1e6 + 0.5) : 0; }")
+    out.append("")
+    out.append("FBD_API void* @@ID@@_new(double cycle_s, const double* p, int np) {")
+    out.append("  (void)cycle_s;  // the scan cycle is the Modelica sample period")
+    out.append("  double pv[FBD_NP + 1] = {0};")
+    out.append("  for (int i = 0; i < FBD_NP && i < np; i++) pv[i] = p[i];")
+    out.append("  void* mem = malloc(sizeof(Program));")
+    out.append("  if (!mem) return 0;")
+    out.append("  Program* prog = new (mem) Program();")
+    out.append("  fbd_set_time(0);")
+    out.append("  prog->fbd_init(pv);")
+    out.append("  return prog;")
+    out.append("}")
+    out.append("")
+    out.append("FBD_API void @@ID@@_free(void* h) {")
+    out.append("  if (!h) return;")
+    out.append("  ((Program*)h)->~Program();")
+    out.append("  free(h);")
+    out.append("}")
+    out.append("")
+    out.append("FBD_API void @@ID@@_step(void* h, double t, const double* u, int nu, double* y, int ny) {")
+    out.append("  double uv[FBD_NU + 1] = {0}, yv[FBD_NY + 1] = {0};")
+    out.append("  for (int i = 0; i < FBD_NU && i < nu; i++) uv[i] = u[i];")
+    out.append("  fbd_set_time(t);")
+    out.append("  if (h) ((Program*)h)->fbd_step(uv, yv);")
+    out.append("  for (int i = 0; i < ny; i++) y[i] = i < FBD_NY ? yv[i] : 0.0;")
+    out.append("}")
+    out.append("")
+    res.code = "\n".join(out)
+    for lst in (inputs, outputs, params):
+        for q in lst:
+            q.pop("c", None)
+    res.model = {"inputs": inputs, "outputs": outputs, "params": params}

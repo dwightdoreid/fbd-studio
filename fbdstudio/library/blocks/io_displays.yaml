@@ -86,6 +86,7 @@ blocks:
             strcat(out, buf);
           }
           if (changed) Serial.println(out);
+    model: {cycle: "OK = true;"}
 
   - type: OLED
     category: Displays
@@ -175,6 +176,7 @@ blocks:
             strcat(out, buf);
           }
           if (changed) Serial.println(out);
+    model: {cycle: "OK = true;"}
 
   - type: TFT
     category: Displays
@@ -286,3 +288,4 @@ blocks:
             strcat(out, buf);
           }
           if (changed) Serial.println(out);
+    model: {cycle: "OK = true;"}
