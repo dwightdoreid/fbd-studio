@@ -157,6 +157,26 @@ cycle: |
   OK = plc_i2c::read(0x40, 0xE3, b, 2);
 ```
 
+The signal processing blocks (`signal_processing.yaml`) use `plc_dsp.h`: a
+sample-rate meter (`plc_dsp::Rate`), biquad filter design
+(`plc_dsp::Biquad`, Audio EQ Cookbook) and an FFT with windowing
+(`plc_dsp::fft`, `plc_dsp::analyse`). A custom filter block can reuse them:
+
+```yaml
+includes: ['"plc_dsp.h"']
+members: |
+  plc_dsp::Rate rate;
+  plc_dsp::Biquad lp;
+cycle: |
+  rate.update(micros());
+  if (rate.ready()) lp.design(plc_dsp::LOWPASS, 5.0, 0.707, rate.fs());
+  OUT = (float)lp.run(IN);
+```
+
+Avoid names that the Arduino core defines as macros, such as `PI`, `TWO_PI`,
+`HALF_PI`, `DEG_TO_RAD`, `HIGH` or `INPUT`. The simulator defines them as
+well, so a clash shows up there too.
+
 MQTT networking runs in its own FreeRTOS task (`plc_mqtt.h`), so a block
 never waits for the network. Never print to `Serial` from another task: it
 would mix with the monitor protocol.

@@ -1,0 +1,533 @@
+# Signal processing (DSP) blocks.
+#
+# Every block takes one sample per scan cycle, so the sample rate is the scan rate
+# (100 Hz at a 10 ms cycle, 1 kHz at 1 ms) and the highest frequency that can be
+# seen is half of it. Blocks that depend on the sample rate measure it.
+# Shared code is in runtime/plc_dsp.h.
+blocks:
+  # ------------------------------------------------------------ filters
+  - type: FILTER
+    category: Signal processing
+    title: Filter (low/high/band-pass, notch)
+    description: >-
+      Digital IIR filter designed for the measured sample rate. Low- and high-pass filters are
+      Butterworth filters of order 2 to 8 (the cut-off FC is the -3 dB point; Q is not used). For
+      band-pass (0 dB at FC), notch and all-pass, Q sets the width (bandwidth = FC / Q) and higher
+      orders repeat the section. FC and Q can be changed online. Starts without a transient.
+    includes: ['"plc_dsp.h"']
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: FC, type: REAL, default: 1, description: Cut-off / centre frequency in Hz}
+      - {name: Q, type: REAL, default: 0.707, description: Quality factor (band-pass, notch, all-pass)}
+    params:
+      - name: kind
+        kind: enum
+        options: {"Low-pass": "plc_dsp::LOWPASS", "High-pass": "plc_dsp::HIGHPASS", "Band-pass": "plc_dsp::BANDPASS",
+                  "Notch (band-stop)": "plc_dsp::NOTCH", "All-pass": "plc_dsp::ALLPASS"}
+      - name: order
+        kind: enum
+        options: {"2": "2", "4": "4", "6": "6", "8": "8"}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: fs_d, type: REAL, description: sample rate of the current design}
+      - {name: fc_d, type: REAL}
+      - {name: q_d, type: REAL}
+      - {name: x0, type: REAL}
+      - {name: designed, type: BOOL}
+    members: |
+      plc_dsp::Rate rate;
+      plc_dsp::Biquad sec[4];
+    cycle: |
+      rate.update(micros());
+      int n = order / 2;
+      if (!rate.ready()) {  // the sample rate is not known yet: pass the DC value
+        x0 = IN;
+        OUT = plc_dsp::dc_gain_of(kind) * IN;
+      } else {
+        float fs = rate.fs();
+        if (!designed || fabsf(fs - fs_d) > 0.005f * fs_d || FC != fc_d || Q != q_d) {
+          for (int k = 0; k < n; k++) {
+            bool bw = kind == plc_dsp::LOWPASS || kind == plc_dsp::HIGHPASS;
+            sec[k].design(kind, FC, bw ? plc_dsp::butterworth_q(order, k) : Q, fs);
+          }
+          if (!designed) {
+            double x = x0;
+            for (int k = 0; k < n; k++) { sec[k].settle(x); x *= sec[k].dc_gain(); }
+          }
+          designed = true; fs_d = fs; fc_d = FC; q_d = Q;
+        }
+        double y = IN;
+        for (int k = 0; k < n; k++) y = sec[k].run(y);
+        if (!isfinite(y)) {  // e.g. after an invalid input: restart in steady state
+          y = IN;
+          for (int k = 0; k < n; k++) { sec[k].settle(y); y *= sec[k].dc_gain(); }
+        }
+        OUT = (float)y;
+      }
+
+  - type: BIQUAD
+    category: Signal processing
+    title: Biquad (coefficients)
+    description: >-
+      Second-order IIR section with your own coefficients, e.g. from scipy.signal or MATLAB:
+      y = B0*x + B1*x[-1] + B2*x[-2] - A1*y[-1] - A2*y[-2] (A0 = 1). The coefficients must be designed
+      for the scan rate. Starts in steady state.
+    includes: ['"plc_dsp.h"']
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: B0, type: REAL, default: 1}
+      - {name: B1, type: REAL, default: 0}
+      - {name: B2, type: REAL, default: 0}
+      - {name: A1, type: REAL, default: 0}
+      - {name: A2, type: REAL, default: 0}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: started, type: BOOL}
+    members: |
+      plc_dsp::Biquad s;
+    cycle: |
+      s.b0 = B0; s.b1 = B1; s.b2 = B2; s.a1 = A1; s.a2 = A2;
+      if (!started) { started = true; s.settle(IN); }
+      float y = (float)s.run(IN);
+      if (!isfinite(y)) { s.settle(0.0); y = 0.0f; }
+      OUT = y;
+
+  - type: FIR
+    category: Signal processing
+    title: FIR filter
+    description: >-
+      Finite impulse response filter: OUT = B1*IN + B2*IN[-1] + ... with up to 32 coefficients
+      (set the number of B inputs). Always stable; with symmetric coefficients it has linear phase.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: B, type: REAL, default: 0, variadic: {min: 2, max: 32, default: 4}, description: Coefficient}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: head, type: USINT}
+      - {name: started, type: BOOL}
+    members: |
+      float hist[32];
+    cycle: |
+      if (!started) { started = true; for (int i = 0; i < 32; i++) hist[i] = IN; }
+      head = (uint8_t)((head + 31) & 31);
+      hist[head] = IN;
+      double y = 0;
+      for (int i = 0; i < B_n; i++) y += (double)B[i] * hist[(head + i) & 31];
+      OUT = (float)y;
+
+  - type: MEDIAN
+    category: Signal processing
+    title: Median filter
+    description: OUT = median of the last n samples. Removes single spikes (e.g. from a noisy ultrasonic sensor) without smoothing edges.
+    inputs:
+      - {name: IN, type: REAL}
+    params:
+      - {name: n, kind: int, default: 5, min: 3, max: 15, description: Window (odd number of samples)}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: head, type: USINT}
+      - {name: started, type: BOOL}
+    members: |
+      float hist[15];
+    cycle: |
+      int len = n < 1 ? 1 : (n > 15 ? 15 : n);
+      if (!started) { started = true; for (int i = 0; i < 15; i++) hist[i] = IN; }
+      hist[head] = IN;
+      head = (uint8_t)((head + 1) % len);
+      float s[15];
+      for (int i = 0; i < len; i++) {  // insertion sort of a copy
+        float v = hist[i];
+        int j = i - 1;
+        while (j >= 0 && s[j] > v) { s[j + 1] = s[j]; j--; }
+        s[j + 1] = v;
+      }
+      OUT = (len & 1) ? s[len / 2] : 0.5f * (s[len / 2 - 1] + s[len / 2]);
+
+  # ------------------------------------------------------------ analysis
+  - type: FFT
+    category: Signal processing
+    title: Spectrum analyser (FFT)
+    description: >-
+      Collects n samples, then computes their spectrum (READY is TRUE for one scan when new results
+      are there). PEAK_F/PEAK_A are the frequency and amplitude of the strongest component, MAG the
+      amplitude of the component at frequency F, BAND_RMS the RMS value between F_LO and F_HI, RMS the AC
+      RMS value and DC the mean. Amplitudes are peak values: a sine of amplitude A gives A, also between
+      two bins. The resolution DF is sample rate / n; components closer than about 4 * DF are seen as one.
+      Hann is a good default; Rectangular leaks a lot and is only exact for whole numbers of periods.
+    includes: ['"plc_dsp.h"']
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: F, type: REAL, default: 50, description: Frequency for MAG (Hz)}
+      - {name: F_LO, type: REAL, default: 0, description: Lower band limit for BAND_RMS (Hz)}
+      - {name: F_HI, type: REAL, default: 1000, description: Upper band limit for BAND_RMS (Hz)}
+    params:
+      - name: n
+        kind: enum
+        options: {"32": "32", "64": "64", "128": "128", "256": "256", "512": "512"}
+        default: "256"
+        description: Samples per frame
+      - name: win
+        kind: enum
+        options: {"Hann": "plc_dsp::HANN", "Flat top": "plc_dsp::FLATTOP", "Hamming": "plc_dsp::HAMMING", "Rectangular": "plc_dsp::RECT"}
+    outputs:
+      - {name: READY, type: BOOL, description: New results (one scan)}
+      - {name: PEAK_F, type: REAL, description: Frequency of the highest peak (Hz)}
+      - {name: PEAK_A, type: REAL, description: Amplitude of the highest peak}
+      - {name: MAG, type: REAL, description: Amplitude at F (+-3 bins)}
+      - {name: BAND_RMS, type: REAL, description: RMS value from F_LO to F_HI}
+      - {name: RMS, type: REAL, description: AC RMS value}
+      - {name: DC, type: REAL, description: Mean value}
+      - {name: FS, type: REAL, description: Sample rate (Hz)}
+      - {name: DF, type: REAL, description: Frequency resolution (Hz)}
+    vars:
+      - {name: count, type: UINT}
+      - {name: t_first, type: UDINT}
+    members: |
+      float buf[plc_dsp::FFT_MAX];
+    cycle: |
+      uint32_t now = micros();
+      READY = false;
+      if (count == 0) t_first = now;
+      buf[count++] = IN;
+      if (count >= n) {
+        float span = (float)(uint32_t)(now - t_first) * 1e-6f;
+        float fs = span > 0.0f ? (n - 1) / span : 0.0f;
+        if (fs > 0.0f) {
+          plc_dsp::Spectrum s = plc_dsp::analyse(buf, n, fs, win, F, F_LO, F_HI);
+          PEAK_F = s.peak_f; PEAK_A = s.peak_a; MAG = s.mag; BAND_RMS = s.band_rms;
+          RMS = s.rms; DC = s.dc; FS = fs; DF = fs / n;
+          READY = true;
+        }
+        count = 0;
+      }
+
+  - type: GOERTZEL
+    category: Signal processing
+    title: Tone detector (Goertzel)
+    description: >-
+      Measures the amplitude of one frequency F over frames of n samples, much cheaper than an FFT.
+      Use it to detect a tone, mains hum or a rotating part. MAG is the peak amplitude at F (exact when
+      a frame holds a whole number of periods); READY is TRUE for one scan per frame.
+    includes: ['"plc_dsp.h"']
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: F, type: REAL, default: 10, description: Frequency (Hz)}
+    params:
+      - {name: n, kind: int, default: 100, min: 8, max: 4096, description: Samples per frame}
+    outputs:
+      - {name: MAG, type: REAL}
+      - {name: READY, type: BOOL}
+    vars:
+      - {name: count, type: UINT}
+      - {name: coef, type: REAL}
+      - {name: cw, type: REAL}
+      - {name: sw, type: REAL}
+    members: |
+      plc_dsp::Rate rate;
+      double s1 = 0, s2 = 0, d1 = 0, d2 = 0, sum = 0;
+    cycle: |
+      rate.update(micros());
+      READY = false;
+      if (rate.ready()) {
+        if (count == 0) {
+          double w = plc_dsp::kTwoPi * F / rate.fs();
+          cw = (float)cos(w); sw = (float)sin(w); coef = 2.0f * cw;
+          s1 = s2 = d1 = d2 = sum = 0.0;
+        }
+        double s = IN + (double)coef * s1 - s2;
+        s2 = s1; s1 = s;
+        double d = 1.0 + (double)coef * d1 - d2;  // the same recursion for a constant 1 ...
+        d2 = d1; d1 = d;
+        sum += IN;
+        if (++count >= n) {
+          // ... so that the frame's mean (DC) can be removed exactly: X(w) - mean * ONE(w)
+          double m = sum / n;
+          double re = (s1 - m * d1) * cw - (s2 - m * d2), im = (s1 - m * d1) * sw;
+          MAG = (float)(2.0 * sqrt(re * re + im * im) / n);
+          READY = true;
+          count = 0;
+        }
+      }
+
+  - type: FREQ_MEAS
+    category: Signal processing
+    title: Frequency measurement
+    description: >-
+      Measures the frequency of a periodic signal from its rising crossings through LEVEL (with
+      hysteresis HYS against noise), interpolated between samples. F is 0 when no crossing came for
+      TIMEOUT. The signal must be slower than half the scan rate.
+    includes: ['"plc_dsp.h"']
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: LEVEL, type: REAL, default: 0, description: Crossing level}
+      - {name: HYS, type: REAL, default: 0.1, description: Hysteresis}
+      - {name: TIMEOUT, type: TIME, default: "T#5s"}
+    outputs:
+      - {name: F, type: REAL, description: Frequency (Hz)}
+      - {name: PERIOD, type: REAL, description: Period (s)}
+      - {name: PULSE, type: BOOL, description: TRUE in the scan of each crossing}
+    vars:
+      - {name: armed, type: BOOL}
+      - {name: have_last, type: BOOL}
+      - {name: prev, type: REAL}
+    members: |
+      plc_dsp::Rate rate;
+      double t = 0, t_cross = 0;
+    cycle: |
+      float dt = rate.update(micros());
+      t += dt;
+      PULSE = false;
+      float h = HYS < 0.0f ? -HYS * 0.5f : HYS * 0.5f;
+      if (IN < LEVEL - h) armed = true;
+      if (armed && IN >= LEVEL + h && dt > 0.0f) {
+        // interpolate the moment the signal passed LEVEL
+        double frac = (IN != prev) ? (double)(IN - LEVEL) / (IN - prev) : 0.0;
+        if (frac < 0) frac = 0;
+        if (frac > 1) frac = 1;
+        double tc = t - frac * dt;
+        if (have_last && tc > t_cross) { PERIOD = (float)(tc - t_cross); F = 1.0f / PERIOD; }
+        t_cross = tc; have_last = true; armed = false; PULSE = true;
+      }
+      if (have_last && t - t_cross > TIMEOUT * 0.001) { F = 0.0f; PERIOD = 0.0f; }
+      prev = IN;
+
+  - type: RMS
+    category: Signal processing
+    title: RMS value
+    description: >-
+      Running RMS value, averaged with time constant T (make T several periods of the signal). In
+      "AC only" mode the mean is removed first, so OUT is the RMS of the variation (e.g. vibration).
+    includes: ["<math.h>"]
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: T, type: TIME, default: "T#1s", description: Averaging time constant}
+    params:
+      - name: mode
+        kind: enum
+        options: {"AC + DC (true RMS)": "0", "AC only": "1"}
+    outputs:
+      - {name: OUT, type: REAL, description: RMS value}
+      - {name: MEAN, type: REAL, description: Mean value}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+    members: |
+      double m1 = 0, m2 = 0;
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      if (!started) { started = true; m1 = mode ? IN : 0.0; m2 = mode ? (double)IN * IN : 0.0; }
+      double t = T * 0.001;
+      double a = t > 0 ? 1.0 - exp(-dt / t) : 1.0;
+      if (dt > 0 || t <= 0) { m1 += a * (IN - m1); m2 += a * ((double)IN * IN - m2); }
+      double ms = mode ? m2 - m1 * m1 : m2;
+      OUT = (float)sqrt(ms > 0 ? ms : 0.0);
+      MEAN = (float)m1;
+
+  - type: STATS
+    category: Signal processing
+    title: Window statistics
+    description: Mean, standard deviation, minimum and maximum of the last n samples.
+    includes: ["<math.h>"]
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: RST, type: BOOL, description: Start a new window}
+    params:
+      - {name: n, kind: int, default: 50, min: 2, max: 128, description: Window (samples)}
+    outputs:
+      - {name: MEAN, type: REAL}
+      - {name: STD, type: REAL, description: Standard deviation}
+      - {name: MIN, type: REAL}
+      - {name: MAX, type: REAL}
+    vars:
+      - {name: count, type: USINT}
+      - {name: head, type: USINT}
+    members: |
+      float hist[128];
+    cycle: |
+      int len = n < 2 ? 2 : (n > 128 ? 128 : n);
+      if (RST) { count = 0; head = 0; }
+      hist[head] = IN;
+      head = (uint8_t)((head + 1) % len);
+      if (count < len) count++;
+      double s = 0, s2 = 0;
+      float lo = hist[0], hi = hist[0];
+      for (int i = 0; i < count; i++) {
+        float v = hist[i];
+        s += v; s2 += (double)v * v;
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+      double m = s / count, var = count > 1 ? (s2 - s * m) / (count - 1) : 0.0;
+      MEAN = (float)m; STD = (float)sqrt(var > 0 ? var : 0.0); MIN = lo; MAX = hi;
+
+  - type: PEAK_HOLD
+    category: Signal processing
+    title: Peak detector
+    description: >-
+      OUT holds the highest value of IN (or of |IN|). After HOLD without a new peak it decays towards
+      IN with time constant DECAY (0 = hold until RST).
+    includes: ["<math.h>"]
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: HOLD, type: TIME, default: "T#1s"}
+      - {name: DECAY, type: TIME, default: "T#1s"}
+      - {name: RST, type: BOOL}
+    params:
+      - {name: absolute, kind: bool, default: false, description: "Use |IN| (envelope of an AC signal)"}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: since, type: REAL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      float x = absolute ? fabsf(IN) : IN;
+      if (!started || RST || x >= OUT) { OUT = x; since = 0.0f; started = true; }
+      else {
+        since += dt;
+        float d = DECAY * 0.001f;
+        if (since >= HOLD * 0.001f && d > 0.0f) OUT = x + (OUT - x) * expf(-dt / d);
+      }
+
+  # ------------------------------------------------------------ estimation
+  - type: KALMAN
+    category: Signal processing
+    title: Kalman filter (1-D)
+    description: >-
+      Estimates a slowly changing value X from noisy measurements Z. R is the variance of the measurement
+      noise (standard deviation squared), Q how much the true value may change (variance per second).
+      Small Q: smooth but slow; large Q: follows quickly. P is the estimate's variance, K the current gain.
+    inputs:
+      - {name: Z, type: REAL, description: Measurement}
+      - {name: Q, type: REAL, default: 0.01, description: Process noise (variance per second)}
+      - {name: R, type: REAL, default: 1, description: Measurement noise (variance)}
+      - {name: RST, type: BOOL}
+    outputs:
+      - {name: X, type: REAL, description: Estimate}
+      - {name: P, type: REAL, description: Estimate variance}
+      - {name: K, type: REAL, description: Kalman gain}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      float r = R > 1e-12f ? R : 1e-12f;
+      if (!started || RST) { started = true; X = Z; P = r; K = 1.0f; }
+      else {
+        P += (Q > 0.0f ? Q : 0.0f) * dt;
+        K = P / (P + r);
+        X += K * (Z - X);
+        P *= 1.0f - K;
+      }
+
+  - type: COMPL_FILTER
+    category: Signal processing
+    title: Complementary filter
+    description: >-
+      Fuses a rate sensor and an absolute but noisy sensor, e.g. a gyroscope (RATE in °/s) and the tilt
+      angle from an accelerometer (ANGLE in °): OUT integrates RATE and is pulled towards ANGLE with time
+      constant T. Short-term changes come from the gyro, the long-term value (no drift) from the accelerometer.
+    inputs:
+      - {name: RATE, type: REAL, description: Rate of change (units per second)}
+      - {name: ANGLE, type: REAL, description: Absolute measurement}
+      - {name: T, type: TIME, default: "T#1s", description: Crossover time constant}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      if (!started) { started = true; OUT = ANGLE; }
+      else {
+        float t = T * 0.001f;
+        float a = (t > 0.0f) ? t / (t + dt) : 0.0f;
+        OUT = a * (OUT + RATE * dt) + (1.0f - a) * ANGLE;
+      }
+
+  # ------------------------------------------------------------ sources and sampling
+  - type: SIG_GEN
+    category: Signal processing
+    title: Signal generator
+    description: >-
+      OUT = OFFSET + AMP * waveform(F). Sine, square, triangle, sawtooth or noise (uniform in -AMP..AMP,
+      or Gaussian with standard deviation AMP). Use it to test filters and controllers in the simulator.
+    includes: ["<math.h>"]
+    inputs:
+      - {name: F, type: REAL, default: 1, description: Frequency (Hz)}
+      - {name: AMP, type: REAL, default: 1, description: Amplitude}
+      - {name: OFFSET, type: REAL, default: 0}
+      - {name: EN, type: BOOL, default: TRUE}
+    params:
+      - name: wave
+        kind: enum
+        options: {"Sine": "0", "Square": "1", "Triangle": "2", "Sawtooth": "3", "Noise (uniform)": "4", "Noise (Gaussian)": "5"}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: last_us, type: UDINT}
+      - {name: started, type: BOOL}
+      - {name: seed, type: UDINT, init: 2463534242}
+    members: |
+      double phase = 0;
+    cycle: |
+      uint32_t now = micros();
+      float dt = started ? (float)(uint32_t)(now - last_us) * 1e-6f : 0.0f;
+      last_us = now;
+      started = true;
+      if (!EN) { phase = 0; OUT = OFFSET; }
+      else {
+        phase += (double)F * dt;
+        phase -= floor(phase);
+        float p = (float)phase, w;
+        switch (wave) {
+          case 1: w = p < 0.5f ? 1.0f : -1.0f; break;
+          case 2: w = p < 0.5f ? 4.0f * p - 1.0f : 3.0f - 4.0f * p; break;
+          case 3: w = 2.0f * p - 1.0f; break;
+          case 4: case 5: {
+            // xorshift32 random numbers
+            float u[2];
+            for (int i = 0; i < 2; i++) {
+              seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+              u[i] = (seed >> 8) * (1.0f / 16777216.0f);
+            }
+            if (wave == 4) w = 2.0f * u[0] - 1.0f;
+            else w = sqrtf(-2.0f * logf(u[0] > 1e-7f ? u[0] : 1e-7f)) * cosf(6.2831853f * u[1]);
+            break;
+          }
+          default: w = sinf(6.2831853f * p); break;
+        }
+        OUT = OFFSET + AMP * w;
+      }
+
+  - type: SAMPLE_HOLD
+    category: Signal processing
+    title: Sample and hold
+    description: OUT takes the value of IN on a rising edge of S (or while S is TRUE) and holds it otherwise.
+    inputs:
+      - {name: IN, type: REAL}
+      - {name: S, type: BOOL, description: Sample}
+    params:
+      - name: mode
+        kind: enum
+        options: {"On rising edge": "0", "While TRUE (track)": "1"}
+    outputs:
+      - {name: OUT, type: REAL}
+    vars:
+      - {name: prev, type: BOOL}
+    cycle: |
+      if (mode ? S : (S && !prev)) OUT = IN;
+      prev = S;

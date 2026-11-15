@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "name": "22 Vibration monitor - FFT",
+  "description": "Machine condition monitoring: an analog accelerometer is sampled at 500 Hz and analysed by an FFT. PEAK_F shows the dominant vibration frequency, BAND_RMS the vibration level from 10 to 200 Hz; an alarm comes on when the level stays too high for 2 s. Without a sensor, a simulated 24 Hz vibration is used.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 2,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "AI",
+      "name": "Accel",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO32"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "e.g. ADXL335 X axis"
+    },
+    {
+      "id": "b2",
+      "type": "SCALE",
+      "name": "Accel_g",
+      "x": 330.0,
+      "y": 60.0,
+      "values": {
+        "IN_MAX": "100.0",
+        "OUT_MIN": "-3.0",
+        "OUT_MAX": "3.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "0..100 % -> -3..3 g"
+    },
+    {
+      "id": "b3",
+      "type": "SIG_GEN",
+      "name": "TestVibration",
+      "x": 80.0,
+      "y": 200.0,
+      "values": {
+        "F": "24.0",
+        "AMP": "0.4"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "simulated machine at 1440 rpm"
+    },
+    {
+      "id": "b4",
+      "type": "DI",
+      "name": "UseSensor",
+      "x": 80.0,
+      "y": 358.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO4",
+        "mode": "PULLUP",
+        "invert": true
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "switch: real sensor / test signal"
+    },
+    {
+      "id": "b5",
+      "type": "SEL",
+      "name": "Source",
+      "x": 580.0,
+      "y": 160.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "FFT",
+      "name": "Spectrum",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {
+        "F": "24.0",
+        "F_LO": "10.0",
+        "F_HI": "200.0"
+      },
+      "params": {
+        "n": "256",
+        "win": "Hann"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "new results every 0.5 s"
+    },
+    {
+      "id": "b7",
+      "type": "GT",
+      "name": "TooHigh",
+      "x": 1080.0,
+      "y": 120.0,
+      "values": {
+        "IN2": "0.5"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "limit 0.5 g RMS"
+    },
+    {
+      "id": "b8",
+      "type": "TON",
+      "name": "Persist",
+      "x": 1330.0,
+      "y": 120.0,
+      "values": {
+        "PT": "T#2s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b9",
+      "type": "DO",
+      "name": "Alarm",
+      "x": 1580.0,
+      "y": 120.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "PCT"
+      },
+      "dst": {
+        "block": "b2",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b4",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "G"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN0"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b6",
+        "port": "BAND_RMS"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b7",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b8",
+        "port": "Q"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -22.0,
+      "text": "Sample rate 500 Hz (2 ms scan cycle), 256 samples: frequency resolution 2 Hz up to 250 Hz.\nRaise TestVibration.AMP above 0.71 (= 0.5 g RMS) to trigger the alarm in the simulator."
+    }
+  ]
+}

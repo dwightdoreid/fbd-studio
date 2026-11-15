@@ -1,0 +1,316 @@
+{
+  "version": 1,
+  "name": "21 Filter lab",
+  "description": "Runs in the simulator without hardware: a slow 1 Hz signal gets random noise and 50 Hz mains hum added. Compare a 4th-order low-pass filter, a 50 Hz notch filter, a median filter and a Kalman filter, and measure what is left with STATS and FFT.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 5,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "SIG_GEN",
+      "name": "Signal",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {
+        "F": "1.0",
+        "AMP": "10.0",
+        "OFFSET": "50.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "the wanted signal"
+    },
+    {
+      "id": "b2",
+      "type": "SIG_GEN",
+      "name": "Noise",
+      "x": 80.0,
+      "y": 218.0,
+      "values": {
+        "AMP": "1.0"
+      },
+      "params": {
+        "wave": "Noise (Gaussian)"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "sensor noise, std. dev. 1"
+    },
+    {
+      "id": "b3",
+      "type": "SIG_GEN",
+      "name": "Hum",
+      "x": 80.0,
+      "y": 376.0,
+      "values": {
+        "F": "50.0",
+        "AMP": "3.0"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "mains interference"
+    },
+    {
+      "id": "b4",
+      "type": "ADD",
+      "name": "Measured",
+      "x": 330.0,
+      "y": 160.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {
+        "IN": 3
+      },
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "FILTER",
+      "name": "LowPass",
+      "x": 580.0,
+      "y": 60.0,
+      "values": {
+        "FC": "4.0"
+      },
+      "params": {
+        "kind": "Low-pass",
+        "order": "4"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "removes noise and hum"
+    },
+    {
+      "id": "b6",
+      "type": "FILTER",
+      "name": "Notch50",
+      "x": 580.0,
+      "y": 200.0,
+      "values": {
+        "FC": "50.0",
+        "Q": "2.0"
+      },
+      "params": {
+        "kind": "Notch (band-stop)"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "removes only the hum"
+    },
+    {
+      "id": "b7",
+      "type": "MEDIAN",
+      "name": "Median",
+      "x": 580.0,
+      "y": 340.0,
+      "values": {},
+      "params": {
+        "n": 9
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "SUB",
+      "name": "Residual",
+      "x": 830.0,
+      "y": 60.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "what the low-pass removed"
+    },
+    {
+      "id": "b9",
+      "type": "STATS",
+      "name": "ResidualStats",
+      "x": 1080.0,
+      "y": 60.0,
+      "values": {},
+      "params": {
+        "n": 128
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b10",
+      "type": "FFT",
+      "name": "Spectrum",
+      "x": 830.0,
+      "y": 260.0,
+      "values": {
+        "F": "50.0",
+        "F_LO": "5.0",
+        "F_HI": "100.0"
+      },
+      "params": {
+        "n": "512",
+        "win": "Hann"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "PEAK_F: the signal, MAG: hum amplitude at F"
+    },
+    {
+      "id": "b11",
+      "type": "PWM",
+      "name": "LED",
+      "x": 1080.0,
+      "y": 330.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "brightness = filtered signal"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b1",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b2",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b3",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b4",
+        "port": "IN3"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "IN2"
+      }
+    },
+    {
+      "id": "w9",
+      "src": {
+        "block": "b8",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w10",
+      "src": {
+        "block": "b4",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b10",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w11",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b11",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -38.0,
+      "text": "The scan cycle is 5 ms, so the sample rate is 200 Hz and the highest visible frequency 100\nHz. Change FC, Q and the noise amplitude online. A filter's delay grows with its order and\nwith a lower FC."
+    }
+  ]
+}

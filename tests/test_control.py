@@ -17,12 +17,14 @@ from test_modelica import arr, compile_model, shared_lib
 class Loop:
     """Runs a diagram with a fixed scan cycle; inputs and outputs by block name."""
 
-    def __init__(self, library, board, tmp_path, blocks, wires, dt=0.01):
+    def __init__(self, library, board, tmp_path, blocks, wires, dt=0.01, params=None):
         res = compile_model(library, board, Project(name="Ctl", blocks=blocks, wires=wires))
         self.ins = [q["name"] for q in res.model["inputs"]]
         self.outs = [q["name"] for q in res.model["outputs"]]
         new, self._step, self._free = shared_lib(res, "Ctl", tmp_path)
-        params = [q["value"] for q in res.model["params"]]
+        overrides = dict(params or {})  # e.g. {"Pid_KP": 2.0}: like changing a value online
+        params = [overrides.pop(q["name"], q["value"]) for q in res.model["params"]]
+        assert not overrides, f"unknown parameters {list(overrides)}"
         self.h = new(dt, arr(params), len(params))
         self.dt, self.k, self.y = dt, 0, arr([0] * len(self.outs))
 
@@ -50,13 +52,13 @@ class Loop:
 def loop(library, board, tmp_path):
     made = []
 
-    def make(blocks, wires, dt=0.01):
-        lp = Loop(library, board, tmp_path / str(len(made)), blocks, wires, dt)
+    def make(blocks, wires, dt=0.01, params=None):
+        d = tmp_path / str(len(made))
+        d.mkdir()
+        lp = Loop(library, board, d, blocks, wires, dt, params)
         made.append(lp)
         return lp
 
-    for d in range(4):
-        (tmp_path / str(d)).mkdir()
     yield make
     for lp in made:
         lp.close()

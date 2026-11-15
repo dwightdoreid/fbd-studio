@@ -22,6 +22,15 @@
 #define SPI_MODE2 2
 #define SPI_MODE3 3
 
+// Math constants from the real Arduino.h. Defined here too, so that a block that clashes
+// with them (e.g. a variable named TWO_PI) fails in the simulator and the tests as well.
+#define PI 3.1415926535897932384626433832795
+#define HALF_PI 1.5707963267948966192313216916398
+#define TWO_PI 6.283185307179586476925286766559
+#define DEG_TO_RAD 0.017453292519943295769236907684886
+#define RAD_TO_DEG 57.295779513082320876798154814105
+#define EULER 2.718281828459045235360287471352
+
 static uint64_t fbd_now_us = 0;  // simulated time in µs, set by the wrapper
 
 static inline unsigned long millis() { return (unsigned long)(uint32_t)(fbd_now_us / 1000u); }

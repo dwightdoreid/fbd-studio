@@ -1,0 +1,370 @@
+{
+  "version": 1,
+  "name": "23 Tilt sensor - MPU-6050",
+  "description": "Measures a tilt angle with an MPU-6050: the accelerometer gives the absolute angle (ATAN2) but is disturbed by vibration, the gyroscope is smooth but drifts. A complementary filter combines both. A lamp comes on above 30° of tilt.",
+  "board": "esp32dev",
+  "settings": {
+    "cycle_ms": 10,
+    "monitor_ms": 200,
+    "baud": 115200
+  },
+  "blocks": [
+    {
+      "id": "b1",
+      "type": "I2C_WRITE",
+      "name": "WakeUp",
+      "x": 80.0,
+      "y": 60.0,
+      "values": {
+        "REQ": "TRUE",
+        "VALUE": "0"
+      },
+      "params": {
+        "addr": 104,
+        "reg": 107,
+        "mode": "on change of VALUE"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "PWR_MGMT_1 = 0 (wake up), retried until it works"
+    },
+    {
+      "id": "b2",
+      "type": "I2C_READ",
+      "name": "AccelY",
+      "x": 80.0,
+      "y": 182.0,
+      "values": {},
+      "params": {
+        "addr": 104,
+        "reg": 61,
+        "nbytes": "2 bytes",
+        "signed_value": true,
+        "interval_ms": 0
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": "SDA GPIO21, SCL GPIO22"
+    },
+    {
+      "id": "b3",
+      "type": "I2C_READ",
+      "name": "AccelZ",
+      "x": 80.0,
+      "y": 304.0,
+      "values": {},
+      "params": {
+        "addr": 104,
+        "reg": 63,
+        "nbytes": "2 bytes",
+        "signed_value": true,
+        "interval_ms": 0
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b4",
+      "type": "I2C_READ",
+      "name": "GyroX",
+      "x": 80.0,
+      "y": 406.0,
+      "values": {},
+      "params": {
+        "addr": 104,
+        "reg": 67,
+        "nbytes": "2 bytes",
+        "signed_value": true,
+        "interval_ms": 0
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b5",
+      "type": "TO_REAL",
+      "name": "Ay",
+      "x": 330.0,
+      "y": 160.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b6",
+      "type": "TO_REAL",
+      "name": "Az",
+      "x": 330.0,
+      "y": 244.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b7",
+      "type": "TO_REAL",
+      "name": "Gx",
+      "x": 330.0,
+      "y": 328.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "DINT"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b8",
+      "type": "ATAN2",
+      "name": "AccelAngle",
+      "x": 580.0,
+      "y": 160.0,
+      "values": {},
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "radians"
+    },
+    {
+      "id": "b9",
+      "type": "DEG_RAD",
+      "name": "AccelDeg",
+      "x": 830.0,
+      "y": 160.0,
+      "values": {},
+      "params": {
+        "dir": "Radians -> degrees"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b10",
+      "type": "DIV",
+      "name": "GyroRate",
+      "x": 580.0,
+      "y": 330.0,
+      "values": {
+        "IN2": "131.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": "131 counts = 1 °/s"
+    },
+    {
+      "id": "b11",
+      "type": "COMPL_FILTER",
+      "name": "Tilt",
+      "x": 1080.0,
+      "y": 200.0,
+      "values": {
+        "T": "T#1s"
+      },
+      "params": {},
+      "type_args": {},
+      "counts": {},
+      "comment": "degrees"
+    },
+    {
+      "id": "b12",
+      "type": "ABS",
+      "name": "TiltAbs",
+      "x": 1330.0,
+      "y": 200.0,
+      "values": {},
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b13",
+      "type": "GT",
+      "name": "TooSteep",
+      "x": 1580.0,
+      "y": 200.0,
+      "values": {
+        "IN2": "30.0"
+      },
+      "params": {},
+      "type_args": {
+        "T": "REAL"
+      },
+      "counts": {},
+      "comment": ""
+    },
+    {
+      "id": "b14",
+      "type": "DO",
+      "name": "TiltLamp",
+      "x": 1830.0,
+      "y": 200.0,
+      "values": {},
+      "params": {
+        "pin": "GPIO25"
+      },
+      "type_args": {},
+      "counts": {},
+      "comment": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "src": {
+        "block": "b2",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b5",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w2",
+      "src": {
+        "block": "b3",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b6",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w3",
+      "src": {
+        "block": "b4",
+        "port": "VALUE"
+      },
+      "dst": {
+        "block": "b7",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w4",
+      "src": {
+        "block": "b5",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "Y"
+      }
+    },
+    {
+      "id": "w5",
+      "src": {
+        "block": "b6",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b8",
+        "port": "X"
+      }
+    },
+    {
+      "id": "w6",
+      "src": {
+        "block": "b8",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b9",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w7",
+      "src": {
+        "block": "b7",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b10",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w8",
+      "src": {
+        "block": "b10",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b11",
+        "port": "RATE"
+      }
+    },
+    {
+      "id": "w9",
+      "src": {
+        "block": "b9",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b11",
+        "port": "ANGLE"
+      }
+    },
+    {
+      "id": "w10",
+      "src": {
+        "block": "b11",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b12",
+        "port": "IN"
+      }
+    },
+    {
+      "id": "w11",
+      "src": {
+        "block": "b12",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b13",
+        "port": "IN1"
+      }
+    },
+    {
+      "id": "w12",
+      "src": {
+        "block": "b13",
+        "port": "OUT"
+      },
+      "dst": {
+        "block": "b14",
+        "port": "IN"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "x": 80.0,
+      "y": -38.0,
+      "text": "Tilt about the X axis: angle = atan2(ay, az). Compare AccelDeg and Tilt while tapping the\nsensor: Tilt stays calm. A longer T trusts the gyro more. Try a KALMAN block on AccelDeg\nas an alternative."
+    }
+  ]
+}

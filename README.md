@@ -7,8 +7,8 @@ programming and aimed at students, hobbyists and small industrial users.
 ![FBD Studio editor with the tank level example](docs/images/editor.png)
 
 - **PLC-style blocks:** AND/OR/XOR/NOT, SR/RS, R_TRIG/F_TRIG, TON/TOF/TP,
-  CTU/CTD/CTUD, comparisons, arithmetic, SEL/MUX/LIMIT/MAX/MIN, type
-  conversions, and DI/DO/AI/PWM I/O.
+  CTU/CTD/CTUD, comparisons, arithmetic and math functions (SIN/COS/ATAN2,
+  EXP/LN/EXPT, …), SEL/MUX/LIMIT/MAX/MIN, type conversions, and DI/DO/AI/PWM I/O.
 - **Control blocks:** PID (anti-windup, filtered derivative, bumpless manual
   mode), state feedback for LQR or pole-placement gains (with optional
   integral action), lead-lag, PT1/PT2 lags, integrator, differentiator, dead
@@ -17,6 +17,15 @@ programming and aimed at students, hobbyists and small industrial users.
   measure the actual time between scans, so they behave the same at any cycle
   time. With PT1, PT2 and DEADTIME you can also simulate a simple process inside
   the program and practise tuning without hardware.
+- **Signal processing:** Butterworth low/high-pass filters (order 2–8),
+  band-pass, notch and all-pass filters; biquad and FIR filters with your own
+  coefficients; median filter; FFT spectrum analyser (peak frequency and
+  amplitude, band RMS, Hann/Hamming/flat-top windows); Goertzel tone detector;
+  frequency measurement; RMS, window statistics and peak detector; 1-D Kalman
+  and complementary filters; signal generator (sine, square, triangle,
+  sawtooth, noise); sample and hold. One sample is taken per scan cycle, so
+  a 1 ms cycle gives 1 kHz. The sample rate is measured, so the filters stay
+  correct if the cycle time changes.
 - **Communication blocks** where the board supports them: I2C (register
   read/write, bus scan), SPI transfer, WiFi, MQTT publish/subscribe (Home
   Assistant, Node-RED, …) and Bluetooth: classic serial for Android/PC, or
@@ -109,6 +118,9 @@ hardware named. Unless noted, examples are for a generic ESP32 DevKit.
 | 18 PID temperature control | DS18B20, PID, TPO pulses for a solid-state relay, manual mode |
 | 19 PID tuning with a simulated plant | PID, RAMP, PT1 + DEADTIME as a simulated process |
 | 20 State feedback - motor position | STATE_FB with LQR gains, simulated DC motor (PT1, INTEG) |
+| 21 Filter lab | SIG_GEN signal + noise + hum; low-pass, notch, median filters, STATS, FFT |
+| 22 Vibration monitor - FFT | AI accelerometer at 500 Hz, FFT peak and band RMS, alarm |
+| 23 Tilt sensor - MPU-6050 | I2C readings, ATAN2, complementary filter of accelerometer and gyro |
 
 ## Testing with a plant model (Modelica)
 

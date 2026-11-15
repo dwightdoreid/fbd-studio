@@ -1,0 +1,125 @@
+# Mathematical functions (IEC 61131-3 numerical functions). Angles are in radians.
+blocks:
+  - type: SIN
+    category: Arithmetic
+    title: Sine
+    description: "OUT = sin(IN), IN in radians"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = sinf(IN);
+
+  - type: COS
+    category: Arithmetic
+    title: Cosine
+    description: "OUT = cos(IN), IN in radians"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = cosf(IN);
+
+  - type: TAN
+    category: Arithmetic
+    title: Tangent
+    description: "OUT = tan(IN), IN in radians"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = tanf(IN);
+
+  - type: ASIN
+    category: Arithmetic
+    title: Arc sine
+    description: "OUT = asin(IN) in radians (IN is limited to -1..1)"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = asinf(IN < -1.0f ? -1.0f : (IN > 1.0f ? 1.0f : IN));
+
+  - type: ACOS
+    category: Arithmetic
+    title: Arc cosine
+    description: "OUT = acos(IN) in radians (IN is limited to -1..1)"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = acosf(IN < -1.0f ? -1.0f : (IN > 1.0f ? 1.0f : IN));
+
+  - type: ATAN
+    category: Arithmetic
+    title: Arc tangent
+    description: "OUT = atan(IN) in radians (-pi/2..pi/2)"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = atanf(IN);
+
+  - type: EXP
+    category: Arithmetic
+    title: Exponential
+    description: "OUT = e to the power IN"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = expf(IN > 88.0f ? 88.0f : IN);
+
+  - type: LN
+    category: Arithmetic
+    title: Natural logarithm
+    description: "OUT = ln(IN); 0 for IN <= 0"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = IN > 0.0f ? logf(IN) : 0.0f;
+
+  - type: LOG
+    category: Arithmetic
+    title: Logarithm base 10
+    description: "OUT = log10(IN); 0 for IN <= 0"
+    includes: ["<math.h>"]
+    inputs: [{name: IN, type: REAL}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = IN > 0.0f ? log10f(IN) : 0.0f;
+
+  - type: ATAN2
+    category: Arithmetic
+    title: Arc tangent of Y/X
+    description: "OUT = angle of the point (X, Y) in radians (-pi..pi), e.g. a tilt angle from two accelerometer axes"
+    includes: ["<math.h>"]
+    inputs: [{name: Y, type: REAL}, {name: X, type: REAL, default: 1}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = atan2f(Y, X);
+
+  - type: EXPT
+    category: Arithmetic
+    title: Power
+    description: "OUT = IN1 to the power IN2 (0 when undefined, e.g. a negative base with a fractional exponent)"
+    includes: ["<math.h>"]
+    inputs: [{name: IN1, type: REAL}, {name: IN2, type: REAL, default: 2}]
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      float r = powf(IN1, IN2);
+      OUT = isfinite(r) ? r : 0.0f;
+
+  - type: DEG_RAD
+    category: Arithmetic
+    title: Degrees / radians
+    description: Converts an angle between degrees and radians.
+    inputs: [{name: IN, type: REAL}]
+    params:
+      - name: dir
+        kind: enum
+        options: {"Degrees -> radians": "0", "Radians -> degrees": "1"}
+    outputs: [{name: OUT, type: REAL}]
+    cycle: |
+      OUT = dir ? IN * 57.29577951f : IN * 0.01745329252f;
