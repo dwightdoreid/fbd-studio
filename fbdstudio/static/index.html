@@ -29,6 +29,7 @@
       <button id="btn-sim" class="accent" title="Run the program in the simulator (no hardware needed)">▶ Simulate</button>
       <button id="btn-stop" class="danger" title="Stop simulation / monitoring" hidden>■ Stop</button>
       <button id="btn-values-save" title="Store the current values of all unconnected inputs (setpoints, presets, gains) on the controller, so they are kept after a reset or power cut" hidden>Save values</button>
+      <button id="btn-values-copy" title="Copy the controller's current values of the unconnected inputs into the project, so the diagram matches what was tuned online (you can undo this)" hidden>Copy to project</button>
       <button id="btn-values-clear" title="Delete the values saved on the controller: after the next reset it uses the values from the project again" hidden>Clear saved</button>
     </div>
     <div class="group">
@@ -127,7 +128,7 @@
       <ul>
         <li><b>Simulate</b> runs the exact generated code on your PC. Click the switches on DI blocks; use the slider in the properties panel for AI blocks.</li>
         <li><b>Upload</b> builds with PlatformIO and flashes the board on the selected serial port. <b>Monitor</b> then shows live values from the board.</li>
-        <li>While online, you can change unconnected inputs (setpoints, timer presets) in the properties panel without re-uploading. Such changes are lost when the controller restarts, unless you press <b>Save values</b>: the controller then keeps them in its flash memory and uses them instead of the project's values after every restart. If you later change one of these inputs in the diagram and upload again, the new project value applies. <b>Clear saved</b> forgets all saved values. The simulator keeps saved values per project, so you can try this without hardware.</li>
+        <li>While online, you can change unconnected inputs (setpoints, timer presets) in the properties panel without re-uploading. Such changes are lost when the controller restarts, unless you press <b>Save values</b>: the controller then keeps them in its flash memory and uses them instead of the project's values after every restart. If you later change one of these inputs in the diagram and upload again, the new project value applies. <b>Clear saved</b> forgets all saved values. <b>Copy to project</b> takes the controller's current values into the diagram, so the project keeps what you tuned online. The simulator keeps saved values per project, so you can try this without hardware.</li>
         <li>The <b>Scope</b> tab plots signals: click 📈 next to a value in the properties panel, or use “+ signal”. <b>Trend</b> plots the live values as they arrive; <b>Capture</b> records every scan on the board (or in the simulator), optionally from a trigger, for fast signals. Mouse wheel zooms, drag pans, double-click resets. Drag the top edge of the bottom panel to make it taller.</li>
         <li><b>Export…</b> gives you the generated PlatformIO project to continue in C++, or a <b>Modelica package</b> to test the program against a model of the machine in OpenModelica.</li>
       </ul>

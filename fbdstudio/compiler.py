@@ -603,8 +603,15 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
                 while key in keys:  # practically never; keep keys unique within a program
                     key = (key * 2654435761 + 1) & 0xFFFFFFFF or 1
                 keys.add(key)
+                raw = r.inst.values.get(p.name)
+                if raw is None or raw == "":
+                    raw = p.default if p.default is not None else T.zero_value(p.type)
+                try:
+                    init = T.parse_value(p.type, raw)  # the project's value (TIME in ms)
+                except ValueError:
+                    init = None
                 symbols.append({"block": bid, "port": p.name, "type": p.type, "dir": "in", "writable": True,
-                                "c": f"{r.inst.name}.{p.member()}", "key": key})
+                                "c": f"{r.inst.name}.{p.member()}", "key": key, "init": init})
     for i, s in enumerate(symbols):
         s["idx"] = i
     out.append("// ================================================================ monitoring symbols")

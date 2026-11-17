@@ -19,7 +19,7 @@ from . import builder, modelica
 from .blocks import Library
 from .boards import Boards
 from .compiler import compile_project
-from .link import Link, SerialLink, SimLink, list_serial_ports
+from .link import Link, SerialLink, SimLink, float32, list_serial_ports, project_text
 from .project import Project, new_project_id
 
 PKG = Path(__file__).parent
@@ -348,6 +348,37 @@ def create_app(workspace: Path) -> FastAPI:
             raise HTTPException(409, "Not online: start the simulator or connect to the board first")
         state.link.save_values()
         return {"ok": True}
+
+    @app.post("/api/link/values/read")
+    async def values_read(req: CompileReq):
+        """The controller's values of the unconnected inputs that differ from the project's."""
+        link = state.link
+        if not link:
+            raise HTTPException(409, "Not online: start the simulator or connect to the board first")
+        project = parse_project(req.project)
+        res, _ = compile_(project)
+        try:
+            board_values = await asyncio.to_thread(link.read_writable)
+        except (TimeoutError, ValueError) as e:
+            raise HTTPException(409, str(e))
+        init = {(s["block"], s["port"]): s for s in res.symbols if s.get("writable")}
+        names = {b.id: b.name for b in project.blocks}
+        changes, missing = [], 0
+        for sym, value in board_values:
+            mine = init.get((sym["block"], sym["port"]))
+            if value is None:
+                continue
+            if mine is None or mine["type"] != sym["type"]:
+                missing += 1  # removed or wired in the diagram since the program was uploaded
+                continue
+            old = mine.get("init")
+            same = (old is not None and float32(float(old)) == float32(float(value))) if sym["type"] == "REAL" else old == value
+            if not same:
+                changes.append({"block": sym["block"], "port": sym["port"], "type": sym["type"],
+                                "name": names.get(sym["block"], sym["block"]),
+                                "old": None if old is None else project_text(sym["type"], old),
+                                "new": project_text(sym["type"], value)})
+        return {"changes": changes, "skipped": missing}
 
     @app.post("/api/link/values/clear")
     def values_clear():

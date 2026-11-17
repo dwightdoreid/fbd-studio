@@ -231,3 +231,52 @@ def test_old_project_gets_an_id_once(tmp_path):
         first = c.get("/api/projects/workspace/Old").json()["id"]
         assert first and json.loads(f.read_text())["id"] == first
         assert c.get("/api/projects/workspace/Old").json()["id"] == first
+
+
+def test_copy_board_values_into_project(tmp_path):
+    """Online changes are read back exactly and listed as changes against the project."""
+    import time
+    from fastapi.testclient import TestClient
+    from fbdstudio.server import create_app
+    proj = program().model_dump()
+    with TestClient(create_app(tmp_path / "ws")) as c:
+        r = c.post("/api/sim/start", json={"project": proj}).json()
+        assert r["started"], r
+        sym = {(s["block"], s["port"]): s["idx"] for s in r["compile"]["symbols"]}
+        try:
+            assert c.post("/api/link/values/read", json={"project": proj}).json()["changes"] == []
+            for (b, p), v in {("ctu", "PV"): 42, ("ton", "PT"): "T#1m30s", ("mv", "IN"): 0.1, ("and", "IN2"): False}.items():
+                assert c.post("/api/link/write", json={"idx": sym[(b, p)], "value": v}).status_code == 200
+            time.sleep(0.2)
+            res = c.post("/api/link/values/read", json={"project": proj}).json()
+            got = {(x["block"], x["port"]): (x["old"], x["new"]) for x in res["changes"]}
+            assert got == {
+                ("ctu", "PV"): ("5", "42"),
+                ("ton", "PT"): ("T#1s", "T#1m30s"),
+                ("mv", "IN"): ("1.5", "0.1"),  # exact, not the monitor's 4 decimals
+                ("and", "IN2"): ("TRUE", "FALSE"),  # AND inputs default to TRUE
+            }
+            assert res["skipped"] == 0 and res["changes"][0]["name"] in {"Count", "Delay", "Gain", "Gate"}
+
+            # after copying (the UI writes "new" into the block values) there is nothing left to copy
+            for x in res["changes"]:
+                next(b for b in proj["blocks"] if b["id"] == x["block"])["values"][x["port"]] = x["new"]
+            assert c.post("/api/link/values/read", json={"project": proj}).json()["changes"] == []
+
+            # an input removed from the diagram in the meantime is skipped
+            proj["blocks"] = [b for b in proj["blocks"] if b["id"] != "and"]
+            assert c.post("/api/link/values/read", json={"project": proj}).json()["skipped"] == 2
+        finally:
+            c.post("/api/link/stop")
+
+
+def test_project_text_round_trips():
+    from fbdstudio import types as T
+    from fbdstudio.link import float32, parse_line, project_text
+    for v in (0.1, 72.5, 1e-7, 3.0, -2.5e9, 1 / 3):
+        text = project_text("REAL", float32(v))
+        assert float32(T.parse_value("REAL", text)) == float32(v), text
+    assert project_text("TIME", 90000) == "T#1m30s" and T.parse_time("T#1m30s") == 90000
+    syms = [{"type": "INT", "writable": True}, {"type": "BOOL", "writable": False}, {"type": "REAL", "writable": True}]
+    assert parse_line("!V 2 7 0.100000001", syms) == {"ev": "writable_values", "values": [7, 0.100000001]}
+    assert parse_line("!V 3 7 1 2", syms)["ev"] == "mismatch"

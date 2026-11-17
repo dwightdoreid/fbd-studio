@@ -195,8 +195,12 @@ the same value in the project. So:
   flash (e.g. PlatformIO's *Erase Flash*). The next **Save values** replaces
   them, and values left over from other programs are dropped then.
 
-To keep tuned values for good, also enter them in the diagram. Then the project
-and the controller agree, and a new board gets them too.
+To keep tuned values for good, put them into the project: **Copy to
+project** (toolbar, while online) reads the controller's current values of
+all unconnected inputs exactly, without the monitor's rounding. It lists the
+ones that differ from the diagram and writes them in after you confirm. You can
+undo this with Ctrl+Z. Then save the project and upload it. The project and the
+controller agree, and a new board gets the tuned values too.
 
 Saving pauses the scan cycle briefly: a few milliseconds, up to about 100 ms on
 an ESP32 while the flash is busy. So save while the process can tolerate a short

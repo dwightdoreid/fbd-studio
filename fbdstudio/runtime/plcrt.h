@@ -9,6 +9,8 @@
 //     =<ms> <scan us> <max scan us> v0 v1 ...   values of all symbols
 //     !W <idx> / !E <message>             write acknowledged / error
 //     !S <n> / !X                         <n> values saved / saved values cleared
+//     !V <n> v0 v1 ...                    answer to G: the <n> writable symbols' values,
+//                                         in symbol order, REALs with full precision
 //     %A <len> <channels>                 capture armed
 //     %T                                  capture triggered
 //     %C <len> <channels> <period us> <pre>   capture data follows: <len> lines of
@@ -22,6 +24,7 @@
 //     S                 save the values of all writable symbols in non-volatile memory;
 //                       they replace the project's values after every restart
 //     X                 clear the saved values (the project's values apply again)
+//     G                 get the values of all writable symbols (to copy them into the project)
 //     C <every> <len> <pre> <trig> <edge> <level> <i0> [<i1> ...]
 //                       capture: record symbols i0.. (max. 8) every <every> scans,
 //                       <len> samples, <pre> of them before the trigger. <trig> is
@@ -153,12 +156,14 @@ inline void hello() {
 }
 
 // Formats one value as the monitor protocol sends it; returns the number of characters.
-inline int formatSym(const Sym& s, char* out, size_t n) {
+// exact: REAL with 9 significant digits, enough to get the identical float back.
+inline int formatSym(const Sym& s, char* out, size_t n, bool exact = false) {
   switch (s.type) {
     case T_BOOL: return snprintf(out, n, "%d", *(const bool*)s.ptr ? 1 : 0);
     case T_INT: return snprintf(out, n, "%d", (int)*(const int16_t*)s.ptr);
     case T_REAL: {
       double v = *(const float*)s.ptr;
+      if (exact) return snprintf(out, n, "%.9g", v);
       return snprintf(out, n, (v > -1e9 && v < 1e9) ? "%.4f" : "%.6g", v);
     }
     default: return snprintf(out, n, "%ld", (long)*(const int32_t*)s.ptr);
@@ -181,6 +186,28 @@ inline void sendValues() {
     }
     out[k++] = ' ';
     int m = formatSym(r.syms[i], out + k, sizeof(out) - k);
+    if (m > 0) k += m < (int)sizeof(out) - k ? m : (int)sizeof(out) - k - 1;
+  }
+  out[k] = 0;
+  Serial.println(out);
+}
+
+// Answer to G: the values of all writable symbols, printed in pieces like sendValues().
+inline void sendWritable() {
+  Runtime& r = rt();
+  uint16_t count = 0;
+  for (uint16_t i = 0; i < r.nsyms; i++) count += r.syms[i].writable ? 1 : 0;
+  char out[256];
+  int k = snprintf(out, sizeof(out), "!V %u", (unsigned)count);
+  for (uint16_t i = 0; i < r.nsyms; i++) {
+    if (!r.syms[i].writable) continue;
+    if (k > (int)sizeof(out) - 40) {
+      out[k] = 0;
+      Serial.print(out);
+      k = 0;
+    }
+    out[k++] = ' ';
+    int m = formatSym(r.syms[i], out + k, sizeof(out) - k, true);
     if (m > 0) k += m < (int)sizeof(out) - k ? m : (int)sizeof(out) - k - 1;
   }
   out[k] = 0;
@@ -527,6 +554,7 @@ inline void handleLine(char* line) {
     case 'R': r.scan_max = 0; break;
     case 'S': saveValues(); break;
     case 'X': clearSaved(); break;
+    case 'G': sendWritable(); break;
     default: break;
   }
 }

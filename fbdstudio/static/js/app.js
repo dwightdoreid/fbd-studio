@@ -643,6 +643,7 @@ function onlineStarted(kind, res, extra = '') {
   $('#btn-stop').hidden = false;
   $('#btn-sim').hidden = true;
   $('#btn-values-save').hidden = false;
+  $('#btn-values-copy').hidden = false;
   $('#btn-values-clear').hidden = false;
   setValuesPending(false);
   const pill = $('#status-link');
@@ -663,6 +664,7 @@ function stopOnline(text) {
   $('#btn-stop').hidden = true;
   $('#btn-sim').hidden = false;
   $('#btn-values-save').hidden = true;
+  $('#btn-values-copy').hidden = true;
   $('#btn-values-clear').hidden = true;
   setValuesPending(false);
   $('#status-link').textContent = 'Offline';
@@ -688,6 +690,29 @@ async function saveValues() {
   if (!S.online) return;
   setStatus(`Saving the values on the ${controllerName()}…`);
   try { await api('POST', '/api/link/values/save'); } catch (e) { setStatus(e.message); }
+}
+
+// Takes the controller's current values of the unconnected inputs into the diagram.
+async function copyValuesToProject() {
+  if (!S.online) return;
+  const who = controllerName();
+  setStatus(`Reading the values from the ${who}…`);
+  let res;
+  try { res = await api('POST', '/api/link/values/read', { project: S.project }); } catch (e) { return setStatus(e.message); }
+  const { changes, skipped } = res;
+  const note = skipped ? ` (${skipped} input${skipped === 1 ? ' was' : 's were'} removed or wired in the diagram since and ${skipped === 1 ? 'was' : 'were'} skipped)` : '';
+  if (!changes.length) return setStatus(`The project already has the ${who}'s values${note}`);
+  const lines = changes.slice(0, 20).map((c) => `${c.name}.${c.port}:  ${c.old ?? '?'}  →  ${c.new}`);
+  if (changes.length > 20) lines.push(`… and ${changes.length - 20} more`);
+  const n = changes.length;
+  if (!confirm(`Copy ${n} value${n === 1 ? '' : 's'} from the ${who} into the project?\n\n${lines.join('\n')}\n\nYou can undo this with Ctrl+Z.`)) return setStatus('Nothing copied');
+  edit(() => {
+    for (const c of changes) {
+      const b = editor.block(c.block);
+      if (b) { b.values ||= {}; b.values[c.port] = c.new; }
+    }
+  }, true);
+  setStatus(`Copied ${n} value${n === 1 ? '' : 's'} into the project${note}. Save the project, and upload it so the board runs the same values from the project.`);
 }
 
 async function clearSavedValues() {
@@ -942,6 +967,7 @@ $('#btn-sim').onclick = startSim;
 $('#btn-stop').onclick = () => stopOnline('Stopped');
 $('#btn-values-save').onclick = saveValues;
 $('#btn-values-clear').onclick = clearSavedValues;
+$('#btn-values-copy').onclick = copyValuesToProject;
 $('#btn-build').onclick = () => build(false);
 $('#btn-upload').onclick = () => build(true);
 $('#btn-monitor').onclick = startMonitor;

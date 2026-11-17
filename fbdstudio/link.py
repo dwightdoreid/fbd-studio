@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import struct
 import subprocess
 import sys
 import threading
@@ -34,6 +35,29 @@ def parse_value(type_name: str, text: str):
         return None
 
 
+def float32(v: float) -> float:
+    """The value as the controller stores it (REAL is a 32-bit float)."""
+    return struct.unpack("<f", struct.pack("<f", v))[0]
+
+
+def project_text(type_name: str, value) -> str:
+    """A value as it is written in the project (IEC style), e.g. TRUE, T#1m30s, 0.1."""
+    if type_name == "BOOL":
+        return "TRUE" if value else "FALSE"
+    if type_name == "TIME":
+        return T.format_time(int(value))
+    if type_name == "REAL":
+        f = float32(float(value))
+        for digits in range(6, 10):  # the shortest decimal that gives the same float
+            text = f"{f:.{digits}g}"
+            if float32(float(text)) == f:
+                break
+        if "e" not in text and "." not in text and "inf" not in text and "nan" not in text:
+            text += ".0"
+        return text
+    return str(int(value))
+
+
 def parse_line(line: str, symbols: list[dict]) -> dict:
     line = line.rstrip("\r\n")
     if line.startswith("="):
@@ -54,6 +78,12 @@ def parse_line(line: str, symbols: list[dict]) -> dict:
                 "restored": num(4)}  # None: firmware from before saved values existed
     if line.startswith("!W "):
         return {"ev": "ack", "idx": line[3:].strip()}
+    if line.startswith("!V "):
+        writable = [s for s in symbols if s.get("writable")]
+        parts = line[3:].split()
+        if not parts or not parts[0].isdigit() or int(parts[0]) != len(writable) or len(parts) - 1 != len(writable):
+            return {"ev": "mismatch", "text": "the board's values do not belong to this program"}
+        return {"ev": "writable_values", "values": [parse_value(s["type"], v) for s, v in zip(writable, parts[1:])]}
     if line.startswith("!S "):
         n = line[3:].strip()
         return {"ev": "saved", "count": int(n) if n.isdigit() else None}
@@ -84,6 +114,9 @@ class Link:
         self._thread: threading.Thread | None = None
         self._capture: dict | None = None  # capture data being received
         self._capture_channels: list[int] = []
+        self._read_waiters: list = []  # read_writable() calls waiting for "!V"
+        self._read_lock = threading.Lock()
+        self.hello_match: bool | None = None  # did the board say it runs this program?
 
     def _capture_line(self, line: str) -> None:
         """Capture (scope) protocol lines: %A armed, %T triggered, %C header, %D sample, %E end."""
@@ -133,7 +166,14 @@ class Link:
             return
         ev = parse_line(line, self.symbols)
         if ev["ev"] == "hello":
-            ev["match"] = ev["hash"] == self.expected_hash
+            ev["match"] = self.hello_match = ev["hash"] == self.expected_hash
+        if ev["ev"] == "writable_values" or (ev["ev"] == "mismatch" and line.startswith("!V")):
+            with self._read_lock:
+                waiters, self._read_waiters = self._read_waiters, []
+            for w in waiters:
+                w["result"] = ev
+                w["done"].set()
+            return
         self.on_event(ev)
 
     def send(self, line: str) -> None:
@@ -147,6 +187,25 @@ class Link:
         if not sym["writable"]:
             raise ValueError("this value cannot be written (it is driven by a wire)")
         self.send(f"W {idx} {format_write(sym['type'], value)}")
+
+    def read_writable(self, timeout: float = 3.0) -> list[tuple[dict, object]]:
+        """The current values of all writable symbols on the controller, exactly (blocking)."""
+        if self.hello_match is False:
+            raise ValueError("the board runs a different program than this diagram")
+        waiter = {"done": threading.Event(), "result": None}
+        with self._read_lock:
+            self._read_waiters.append(waiter)
+        self.send("G")
+        if not waiter["done"].wait(timeout):
+            with self._read_lock:
+                if waiter in self._read_waiters:
+                    self._read_waiters.remove(waiter)
+            raise TimeoutError("the controller did not answer: upload the program again with this version of FBD Studio")
+        ev = waiter["result"]
+        if ev["ev"] != "writable_values":
+            raise ValueError(ev.get("text", "unexpected answer from the controller"))
+        writable = [s for s in self.symbols if s.get("writable")]
+        return list(zip(writable, ev["values"]))
 
     def save_values(self) -> None:
         """Store the current values of all writable symbols on the controller (answer: 'saved')."""
