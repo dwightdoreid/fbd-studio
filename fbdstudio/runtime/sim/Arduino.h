@@ -31,6 +31,7 @@
 #define EULER 2.718281828459045235360287471352
 
 #define SIM_PINS 256
+#define PLC_SIM 1  // plcrt.h: saved values go to a file (FBD_PARAMS_FILE)
 
 unsigned long millis();
 unsigned long micros();

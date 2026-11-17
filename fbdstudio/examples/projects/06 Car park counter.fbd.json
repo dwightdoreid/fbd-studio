@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-5wyyfc",
   "name": "06 Car park counter",
   "description": "An up/down counter (CTUD) counts cars in and out of a car park with 20 spaces. The FULL sign comes on at 20 cars; free spaces are calculated with SUB. A key switch resets the count.",
   "board": "esp32dev",

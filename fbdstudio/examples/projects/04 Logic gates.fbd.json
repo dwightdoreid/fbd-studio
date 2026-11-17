@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-3zpbct",
   "name": "04 Logic gates",
   "description": "AND, XOR and NOT: a two-hand safety control (the press only runs while both buttons are held) and a two-way light switch as in a staircase (either switch toggles the light).",
   "board": "esp32dev",

@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-td13uu",
   "name": "19 PID tuning with a simulated plant",
   "description": "Learn PID tuning without hardware: the process is simulated inside the program by a first-order lag (PT1, 20 s) and a dead time (3 s). RAMP moves the setpoint smoothly. Run it in the simulator and change SP, KP and TI online.",
   "board": "esp32dev",

@@ -2,11 +2,28 @@
 
 from __future__ import annotations
 
+import secrets
+import string
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 FORMAT_VERSION = 1
+
+_ID_CHARS = string.ascii_lowercase + string.digits
+
+
+def new_project_id(now: datetime | None = None) -> str:
+    """A project id: creation time (UTC) plus 6 random characters, e.g. 20261117-143205-k3x9q2.
+
+    Values saved on a controller only apply to the program with the same project id
+    (see "saved values" in runtime/plcrt.h), so two projects must never share one:
+    the time makes ids of projects created at different seconds differ for certain,
+    the random part covers projects created in the same second.
+    """
+    now = now or datetime.now(timezone.utc)
+    return now.strftime("%Y%m%d-%H%M%S-") + "".join(secrets.choice(_ID_CHARS) for _ in range(6))
 
 
 class PortRef(BaseModel):
@@ -48,6 +65,10 @@ class Settings(BaseModel):
 
 class Project(BaseModel):
     version: int = FORMAT_VERSION
+    # Identity of the program, kept across edits and renames of the diagram but new for
+    # every new project or copy. "" only for projects from before ids existed (the
+    # server gives them one when they are opened).
+    id: str = Field("", max_length=64, pattern=r"^[A-Za-z0-9_\-]*$")
     name: str = "Untitled"
     description: str = ""
     board: str = "esp32dev"

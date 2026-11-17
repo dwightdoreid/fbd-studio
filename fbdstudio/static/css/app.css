@@ -104,6 +104,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb
 .brand span { font-weight: 400; color: var(--muted); margin-left: 2px; }
 .project-name { width: 190px; font-weight: 600; }
 .dirty { color: var(--warn); font-size: 14px; }
+#btn-values-save.pending::after { content: " ●"; color: var(--warn); }
 #port-select { max-width: 190px; }
 .spacer { flex: 1; }
 

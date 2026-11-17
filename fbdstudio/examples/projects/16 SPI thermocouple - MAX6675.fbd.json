@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-98kub0",
   "name": "16 SPI thermocouple - MAX6675",
   "description": "Reads a K-type thermocouple through a MAX6675 on the SPI bus: a 2-byte transfer every 250 ms. Temperature = (RX / 8) x 0.25 °C; bit 2 is set when the thermocouple is not connected.",
   "board": "esp32dev",

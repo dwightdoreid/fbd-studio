@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-3aql84",
   "name": "07 PWM dimmer",
   "description": "A potentiometer on an analog input sets the brightness of an LED via PWM (0..100 %). LIMIT keeps the brightness between 5 and 95 %, and a switch turns the light off with SEL.",
   "board": "esp32dev",

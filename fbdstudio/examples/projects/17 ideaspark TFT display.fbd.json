@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-p1gpbn",
   "name": "17 ideaspark TFT display",
   "description": "For the ideaspark ESP32 board with the built-in 1.14\" LCD: shows a seconds counter, the BOOT button and a value you can change online (V3) on the colour display.",
   "board": "ideaspark_esp32_lcd114",

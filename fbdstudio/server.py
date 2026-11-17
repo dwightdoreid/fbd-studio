@@ -20,7 +20,7 @@ from .blocks import Library
 from .boards import Boards
 from .compiler import compile_project
 from .link import Link, SerialLink, SimLink, list_serial_ports
-from .project import Project
+from .project import Project, new_project_id
 
 PKG = Path(__file__).parent
 STATIC = PKG / "static"
@@ -75,6 +75,7 @@ class Workspace:
         self.boards = self.root / "boards"
         self.build = self.root / "build"
         self.sim_cache = self.root / ".sim"
+        self.sim_values = self.root / ".sim-values"  # saved values of the simulated controller, per project
         for d in (self.projects, self.build, self.sim_cache, self.boards):
             d.mkdir(parents=True, exist_ok=True)
         if not self.blocks.exists():
@@ -132,6 +133,16 @@ def create_app(workspace: Path) -> FastAPI:
     app = FastAPI(title="FBD Studio", lifespan=lifespan)
     app.state.fbd = state
 
+    @app.middleware("http")
+    async def revalidate_ui(request, call_next):
+        # The UI files change with every FBD Studio update. Without this, browsers keep
+        # using cached copies (ES modules especially) and new features stay invisible
+        # until a hard reload. "no-cache" still allows cheap 304 answers via the ETag.
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     # ------------------------------------------------------------- helpers
     def parse_project(data: Any) -> Project:
         try:
@@ -179,7 +190,15 @@ def create_app(workspace: Path) -> FastAPI:
         path = project_path(source, name)
         if not path.is_file():
             raise HTTPException(404, "Project not found")
-        return parse_project(json.loads(path.read_text(encoding="utf-8"))).model_dump()
+        project = parse_project(json.loads(path.read_text(encoding="utf-8")))
+        if not project.id and source == "workspace":
+            # A project from before project ids: give it one now and keep it in the file,
+            # so the program keeps the same id (and its saved values) from now on.
+            project.id = new_project_id()
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(project.model_dump(), indent=2), encoding="utf-8")
+            tmp.replace(path)
+        return project.model_dump()
 
     @app.put("/api/projects/{name}")
     def save_project(name: str, data: dict):
@@ -284,7 +303,11 @@ def create_app(workspace: Path) -> FastAPI:
         except RuntimeError as e:
             return {"started": False, "error": str(e), "compile": res.to_json()}
         state.stop_link()
-        state.link = SimLink(exe, res.symbols, res.runtime_hash, state.emit_threadsafe)
+        try:
+            values_file = state.ws.sim_values / f"{project.id or safe_name(project.name)}.bin"
+        except HTTPException:
+            values_file = state.ws.sim_values / "untitled.bin"
+        state.link = SimLink(exe, res.symbols, res.runtime_hash, state.emit_threadsafe, values_file)
         state.link_info = {"kind": "sim"}
         return {"started": True, "compile": res.to_json()}
 
@@ -317,6 +340,20 @@ def create_app(workspace: Path) -> FastAPI:
             state.link.write_symbol(req.idx, req.value)
         except (ValueError, IndexError) as e:
             raise HTTPException(400, str(e))
+        return {"ok": True}
+
+    @app.post("/api/link/values/save")
+    def values_save():
+        if not state.link:
+            raise HTTPException(409, "Not online: start the simulator or connect to the board first")
+        state.link.save_values()
+        return {"ok": True}
+
+    @app.post("/api/link/values/clear")
+    def values_clear():
+        if not state.link:
+            raise HTTPException(409, "Not online: start the simulator or connect to the board first")
+        state.link.clear_saved_values()
         return {"ok": True}
 
     @app.post("/api/capture")

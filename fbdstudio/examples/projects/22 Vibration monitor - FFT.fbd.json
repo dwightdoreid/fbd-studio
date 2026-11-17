@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-hdnmq4",
   "name": "22 Vibration monitor - FFT",
   "description": "Machine condition monitoring: an analog accelerometer is sampled at 500 Hz and analysed by an FFT. PEAK_F shows the dominant vibration frequency, BAND_RMS the vibration level from 10 to 200 Hz; an alarm comes on when the level stays too high for 2 s. Without a sensor, a simulated 24 Hz vibration is used.",
   "board": "esp32dev",

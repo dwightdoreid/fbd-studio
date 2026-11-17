@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-kjl5bh",
   "name": "01 Blink",
   "description": "The 'hello world' of microcontrollers: the on-board LED (GPIO2) blinks. Change T_ON / T_OFF while running in the simulator!",
   "board": "esp32dev",

@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-w0ulwh",
   "name": "11 Greenhouse",
   "description": "A DHT22 measures temperature and humidity in a greenhouse. A fan runs above 80 % humidity or 30 °C, a frost heater runs below 3 °C. MAX with a feedback wire keeps the highest temperature since start-up.",
   "board": "esp32dev",

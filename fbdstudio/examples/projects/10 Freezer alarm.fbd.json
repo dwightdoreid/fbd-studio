@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-e7494w",
   "name": "10 Freezer alarm",
   "description": "Two DS18B20 probes on one 1-Wire pin watch a freezer and a fridge. An alarm sounds when the freezer is warmer than -15 °C for 5 minutes or a probe fails. Temperatures and alarm state are shown on a 128x64 OLED.",
   "board": "esp32dev",

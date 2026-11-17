@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-rk8li8",
   "name": "02 Motor start-stop",
   "description": "Classic start/stop circuit with a latch, plus a running-hours style counter and a delayed 'running' lamp.",
   "board": "esp32dev",

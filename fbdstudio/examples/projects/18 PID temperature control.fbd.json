@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-qic38x",
   "name": "18 PID temperature control",
   "description": "A PID controller holds an oven or a water bath at 60 °C. The DS18B20 temperature is the process value; the PID output (0..100 %) is turned into on/off pulses for a solid-state relay by TPO. A switch selects manual mode (heater off), and switching back is bumpless.",
   "board": "esp32dev",

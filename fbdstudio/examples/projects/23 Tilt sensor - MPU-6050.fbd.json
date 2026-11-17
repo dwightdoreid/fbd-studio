@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-ekx529",
   "name": "23 Tilt sensor - MPU-6050",
   "description": "Measures a tilt angle with an MPU-6050: the accelerometer gives the absolute angle (ATAN2) but is disturbed by vibration, the gyroscope is smooth but drifts. A complementary filter combines both. A lamp comes on above 30° of tilt.",
   "board": "esp32dev",

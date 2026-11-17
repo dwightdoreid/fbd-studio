@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-rsq1er",
   "name": "09 Weather station",
   "description": "A BME280 on the I2C bus measures temperature, humidity and air pressure and shows them on a 16x2 I2C LCD. An output switches on when the humidity is above 70 %.",
   "board": "esp32dev",

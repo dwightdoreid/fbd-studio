@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-bdlafq",
   "name": "05 Timers",
   "description": "The three IEC timers on one button: TON switches on after the button was held for 2 s, TOF keeps a light on for 10 s after release (staircase light), TP gives a fixed 1 s pulse per press.",
   "board": "esp32dev",

@@ -7,6 +7,7 @@ and handed to a callback as event dicts.
 from __future__ import annotations
 
 import math
+import os
 import subprocess
 import sys
 import threading
@@ -48,9 +49,16 @@ def parse_line(line: str, symbols: list[dict]) -> dict:
         return {"ev": "values", "t": t, "scan_us": scan, "scan_max_us": scan_max, "values": values}
     if line.startswith("#FBD "):
         parts = line.split()
-        return {"ev": "hello", "hash": parts[2] if len(parts) > 2 else "", "count": int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else None}
+        num = lambda i: int(parts[i]) if len(parts) > i and parts[i].isdigit() else None
+        return {"ev": "hello", "hash": parts[2] if len(parts) > 2 else "", "count": num(3),
+                "restored": num(4)}  # None: firmware from before saved values existed
     if line.startswith("!W "):
         return {"ev": "ack", "idx": line[3:].strip()}
+    if line.startswith("!S "):
+        n = line[3:].strip()
+        return {"ev": "saved", "count": int(n) if n.isdigit() else None}
+    if line.strip() == "!X":
+        return {"ev": "cleared"}
     if line.startswith("!E "):
         return {"ev": "device_error", "text": line[3:]}
     return {"ev": "serial", "text": line}
@@ -140,15 +148,29 @@ class Link:
             raise ValueError("this value cannot be written (it is driven by a wire)")
         self.send(f"W {idx} {format_write(sym['type'], value)}")
 
+    def save_values(self) -> None:
+        """Store the current values of all writable symbols on the controller (answer: 'saved')."""
+        self.send("S")
+
+    def clear_saved_values(self) -> None:
+        """Forget the saved values; the project's values apply after the next restart (answer: 'cleared')."""
+        self.send("X")
+
 
 class SimLink(Link):
     kind = "sim"
 
-    def __init__(self, exe: Path, symbols, expected_hash, on_event):
+    def __init__(self, exe: Path, symbols, expected_hash, on_event, values_file: Path | None = None):
+        """values_file: where the simulated controller keeps its saved values (None: it cannot save)."""
         super().__init__(symbols, expected_hash, on_event)
+        env = dict(os.environ)
+        env.pop("FBD_PARAMS_FILE", None)
+        if values_file is not None:
+            Path(values_file).parent.mkdir(parents=True, exist_ok=True)
+            env["FBD_PARAMS_FILE"] = str(values_file)
         self.proc = subprocess.Popen(
             [str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1,
+            text=True, bufsize=1, env=env,
         )
         self._lock = threading.Lock()
         self._thread = threading.Thread(target=self._reader, daemon=True)

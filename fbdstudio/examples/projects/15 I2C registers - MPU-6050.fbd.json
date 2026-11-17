@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-gazfeb",
   "name": "15 I2C registers - MPU-6050",
   "description": "Raw I2C register access with an MPU-6050 accelerometer: I2C_SCAN lists the devices, I2C_READ checks the WHO_AM_I register (0x75 = 0x68), I2C_WRITE wakes the chip up, and the Z acceleration is read and converted to g.",
   "board": "esp32dev",

@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-38aoo5",
   "name": "12 WiFi and MQTT",
   "description": "Connects to WiFi and an MQTT broker (Mosquitto, Home Assistant, Node-RED). Publishes a light level, a door contact and the WiFi signal strength; subscribes to a relay command and an LED brightness. Enter your WiFi and broker settings first!",
   "board": "esp32dev",

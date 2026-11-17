@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-fd1fmf",
   "name": "21 Filter lab",
   "description": "Runs in the simulator without hardware: a slow 1 Hz signal gets random noise and 50 Hz mains hum added. Compare a 4th-order low-pass filter, a 50 Hz notch filter, a median filter and a Kalman filter, and measure what is left with STATS and FFT.",
   "board": "esp32dev",

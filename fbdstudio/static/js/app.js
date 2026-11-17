@@ -75,14 +75,29 @@ const editor = new Editor($('#canvas'), {
   onView: (v) => { $('#zoom-level').textContent = `${Math.round(v.k * 100)}%`; },
 });
 
-function newProject() {
-  const board = S.boards.has('esp32dev') ? 'esp32dev' : [...S.boards.keys()][0] || 'esp32dev';
-  return { version: 1, name: 'Untitled', description: '', board, settings: { cycle_ms: 10, monitor_ms: 200, baud: 115200 }, blocks: [], wires: [], notes: [] };
+// Project id: creation time (UTC) + 6 random characters, e.g. 20261117-143205-k3x9q2 (as
+// new_project_id() in project.py). Values saved on a controller only apply to the program
+// with the same id, so every new project and every copy saved under another name gets a new one.
+function newProjectId() {
+  const t = new Date().toISOString(); // 2026-11-17T14:32:05.123Z
+  const stamp = `${t.slice(0, 4)}${t.slice(5, 7)}${t.slice(8, 10)}-${t.slice(11, 13)}${t.slice(14, 16)}${t.slice(17, 19)}`;
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const rnd = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => chars[b % 36]).join('');
+  return `${stamp}-${rnd}`;
 }
 
-function setProject(p, dirty = false) {
+function newProject() {
+  const board = S.boards.has('esp32dev') ? 'esp32dev' : [...S.boards.keys()][0] || 'esp32dev';
+  return { version: 1, id: newProjectId(), name: 'Untitled', description: '', board, settings: { cycle_ms: 10, monitor_ms: 200, baud: 115200 }, blocks: [], wires: [], notes: [] };
+}
+
+// idFile: the workspace file the project's id belongs to ('' = none yet, e.g. a new project;
+// '#example' for an example). Saving under another name makes a copy, which gets a new id.
+function setProject(p, dirty = false, idFile = '') {
   if (S.online) stopOnline();
   S.project = p;
+  S.idFile = idFile;
+  if (!p.id) { p.id = newProjectId(); dirty = true; } // a draft from before project ids
   p.settings ||= { cycle_ms: 10, monitor_ms: 200, baud: 115200 };
   if (!Array.isArray(p.trend)) p.trend = [];
   editor.setProject(p);
@@ -101,7 +116,7 @@ function markDirty() {
   saveDraft();
 }
 
-const saveDraft = debounce(() => storage('fbd.draft', { project: S.project, dirty: S.dirty }), 500);
+const saveDraft = debounce(() => storage('fbd.draft', { project: S.project, dirty: S.dirty, idFile: S.idFile }), 500);
 
 function updateCount() {
   const p = S.project;
@@ -525,10 +540,14 @@ function renderBlockProps(el, inst) {
         const sym = symbolFor(inst.id, p.name);
         const live = h('span', { class: 'live' }, formatValue(p.type, S.live?.get(`${inst.id}:${p.name}`)));
         S.propsRefs.live.set(p.name, { span: live, type: p.type });
-        const inp = h('input', { placeholder: 'new value', title: 'Changes the value in the running program only. Edit offline to keep it in the project.' });
+        const inp = h('input', { placeholder: 'new value', title: 'Changes the value in the running program. Press "Save values" to keep it on the controller after a reset; edit offline to keep it in the project.' });
         const send = async () => {
           if (!sym) return setStatus('This input is not available online — restart the simulation / upload again.');
-          try { await api('POST', '/api/link/write', { idx: sym.idx, value: inp.value }); inp.value = ''; inp.classList.remove('invalid'); }
+          try {
+            await api('POST', '/api/link/write', { idx: sym.idx, value: inp.value });
+            inp.value = ''; inp.classList.remove('invalid');
+            setValuesPending(true);
+          }
           catch (err) { inp.classList.add('invalid'); setStatus(err.message); }
         };
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
@@ -623,6 +642,9 @@ function onlineStarted(kind, res, extra = '') {
   editor.setLive(S.live);
   $('#btn-stop').hidden = false;
   $('#btn-sim').hidden = true;
+  $('#btn-values-save').hidden = false;
+  $('#btn-values-clear').hidden = false;
+  setValuesPending(false);
   const pill = $('#status-link');
   pill.textContent = kind === 'sim' ? 'Simulating' : `Online ${extra}`;
   pill.className = `pill ${kind === 'sim' ? 'sim' : 'online'}`;
@@ -640,6 +662,9 @@ function stopOnline(text) {
   editor.setLive(null);
   $('#btn-stop').hidden = true;
   $('#btn-sim').hidden = false;
+  $('#btn-values-save').hidden = true;
+  $('#btn-values-clear').hidden = true;
+  setValuesPending(false);
   $('#status-link').textContent = 'Offline';
   $('#status-link').className = 'pill';
   $('#status-scan').textContent = '';
@@ -647,6 +672,28 @@ function stopOnline(text) {
   if (text) setStatus(text);
   renderProps();
   scope.onOffline();
+}
+
+// ----- values saved on the controller (survive a reset)
+const controllerName = () => (S.online?.kind === 'sim' ? 'simulated controller' : 'controller');
+
+function setValuesPending(on) {
+  const b = $('#btn-values-save');
+  b.classList.toggle('pending', on);
+  b.title = (on ? 'Values were changed online and are not saved yet. ' : '')
+    + 'Store the current values of all unconnected inputs (setpoints, presets, gains) on the controller, so they are kept after a reset or power cut';
+}
+
+async function saveValues() {
+  if (!S.online) return;
+  setStatus(`Saving the values on the ${controllerName()}…`);
+  try { await api('POST', '/api/link/values/save'); } catch (e) { setStatus(e.message); }
+}
+
+async function clearSavedValues() {
+  if (!S.online) return;
+  if (!confirm(`Delete the values saved on the ${controllerName()}?\n\nThe values running now stay until the next reset; after that it uses the values from the project again.`)) return;
+  try { await api('POST', '/api/link/values/clear'); } catch (e) { setStatus(e.message); }
 }
 
 function banner(text, warn = false) {
@@ -750,14 +797,28 @@ function onEvent(ev) {
     case 'capture': if (S.online) scope.onCapture(ev); break;
     case 'hello':
       if (!S.online) return;
-      if (ev.match) { checkOnlineDrift(); if (S.online.kind === 'serial') setStatus('Board is running this program'); }
-      else banner('The board runs a different program than this diagram — Upload first', true);
+      if (ev.match) {
+        checkOnlineDrift();
+        const n = ev.restored;
+        const restored = n ? ` — it started with ${n} saved value${n === 1 ? '' : 's'} instead of the project's (Clear saved removes them)` : '';
+        if (S.online.kind === 'serial') setStatus(`Board is running this program${restored}`);
+        else if (n) setStatus(`Simulation running${restored}`);
+      } else banner('The board runs a different program than this diagram — Upload first', true);
       break;
     case 'mismatch':
       banner('The board runs a different program than this diagram — Upload first', true);
       break;
     case 'serial': log(ev.text, ''); break;
     case 'device_error': setStatus(`Device: ${ev.text}`); break;
+    case 'saved':
+      if (!S.online) return;
+      setValuesPending(false);
+      setStatus(`Saved ${ev.count ?? ''} values on the ${controllerName()}: they are used after every restart`);
+      break;
+    case 'cleared':
+      if (!S.online) return;
+      setStatus(`Saved values deleted: after the next reset the ${controllerName()} uses the project's values`);
+      break;
     case 'link': if (ev.state === 'stopped') stopOnline(ev.text); break;
     case 'build': log(ev.line, /error|failed/i.test(ev.line) ? 'err' : ''); break;
     case 'build_done':
@@ -792,13 +853,17 @@ function setStatus(text) { $('#status-msg').textContent = text; }
 async function save() {
   const name = S.project.name.trim();
   if (!name) return setStatus('Give the project a name first');
+  const copy = S.idFile && S.idFile !== name; // saved under another name, or an example
+  const id = S.project.id;
+  if (copy) S.project.id = newProjectId();
   try {
     await api('PUT', `/api/projects/${encodeURIComponent(name)}`, S.project);
+    S.idFile = name;
     S.dirty = false;
     $('#dirty').hidden = true;
     saveDraft();
     setStatus(`Saved "${name}"`);
-  } catch (e) { setStatus(`Save failed: ${e.message}`); }
+  } catch (e) { if (copy) S.project.id = id; setStatus(`Save failed: ${e.message}`); }
 }
 
 const confirmDiscard = () => !S.dirty || confirm('Discard unsaved changes?');
@@ -822,7 +887,7 @@ async function openDialog() {
           if (!confirmDiscard()) return;
           const proj = await api('GET', `/api/projects/${src}/${encodeURIComponent(p.name)}`);
           dlg.close();
-          setProject(proj, src === 'example');
+          setProject(proj, src === 'example', src === 'example' ? '#example' : p.name);
           setStatus(src === 'example' ? `Opened example "${p.name}" — Save stores a copy in your workspace` : `Opened "${p.name}"`);
         },
       }, h('span', { class: 'n' }, p.name),
@@ -875,6 +940,8 @@ $('#btn-note').onclick = () => { const c = editor.centerWorld(); editor.addNote(
 $('#btn-fit').onclick = () => editor.fit();
 $('#btn-sim').onclick = startSim;
 $('#btn-stop').onclick = () => stopOnline('Stopped');
+$('#btn-values-save').onclick = saveValues;
+$('#btn-values-clear').onclick = clearSavedValues;
 $('#btn-build').onclick = () => build(false);
 $('#btn-upload').onclick = () => build(true);
 $('#btn-monitor').onclick = startMonitor;
@@ -943,7 +1010,7 @@ window.addEventListener('beforeunload', (e) => { if (S.dirty) { saveDraft(); } }
     return;
   }
   const draft = storage('fbd.draft');
-  if (draft?.project?.blocks) setProject(draft.project, draft.dirty);
+  if (draft?.project?.blocks) setProject(draft.project, draft.dirty, draft.idFile ?? (draft.dirty ? '#unknown' : ''));
   else setProject(newProject());
   refreshPorts();
   connectWs();

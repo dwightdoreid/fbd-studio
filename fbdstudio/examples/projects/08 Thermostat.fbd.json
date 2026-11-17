@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141113-4sjp25",
   "name": "08 Thermostat",
   "description": "A heating thermostat with a day/night setpoint (SEL) and a switching hysteresis of +/- 0.5 °C (SUB, ADD, LT, GT, SR). The temperature comes from an analog sensor scaled to 0..50 °C.",
   "board": "esp32dev",

@@ -591,6 +591,7 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
 
     # ---- symbols for online monitoring
     symbols: list[dict] = []
+    keys: set[int] = set()
     for bid in order:
         r = resolved[bid]
         for p in r.outputs.values():
@@ -598,15 +599,19 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
                             "c": f"{r.inst.name}.{p.member()}"})
         for p in r.inputs.values():
             if (bid, p.name) not in wired:
+                key = _saved_value_key(project.id, bid, r.bdef.type, p.name, p.type, const_values[bid].get(p.name, ""))
+                while key in keys:  # practically never; keep keys unique within a program
+                    key = (key * 2654435761 + 1) & 0xFFFFFFFF or 1
+                keys.add(key)
                 symbols.append({"block": bid, "port": p.name, "type": p.type, "dir": "in", "writable": True,
-                                "c": f"{r.inst.name}.{p.member()}"})
+                                "c": f"{r.inst.name}.{p.member()}", "key": key})
     for i, s in enumerate(symbols):
         s["idx"] = i
     out.append("// ================================================================ monitoring symbols")
     if symbols:
         out.append("static const plc::Sym SYMS[] = {")
         for s in symbols:
-            out.append(f"  {{&{s['c']}, plc::T_{s['type']}, {1 if s['writable'] else 0}}},  // {s['idx']}")
+            out.append(f"  {{&{s['c']}, plc::T_{s['type']}, {1 if s['writable'] else 0}, 0x{s.get('key', 0):08x}u}},  // {s['idx']}")
         out.append("};")
         out.append("static const uint16_t SYM_COUNT = sizeof(SYMS) / sizeof(SYMS[0]);")
     else:
@@ -628,9 +633,13 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
             lines.append(f"  {r.inst.name}.{base}_n = {n};")
         for pname, lit in const_values[bid].items():
             lines.append(f"  {r.inst.name}.{r.inputs[pname].member()} = {lit};")
-        lines.append(f"  {r.inst.name}.init();")
-        out.append(f"  // {r.inst.name} ({r.bdef.type})")
-        out.extend(lines)
+        if lines:
+            out.append(f"  // {r.inst.name} ({r.bdef.type})")
+            out.extend(lines)
+    out.append("  // values saved on the controller (\"Save values\" while online) replace the ones above")
+    out.append("  plc::restore();")
+    for bid in order:
+        out.append(f"  {resolved[bid].inst.name}.init();")
     out.append("}")
     out.append("")
 
@@ -661,7 +670,20 @@ def _generate(res, project, board, target, resolved, order, wired, feedback, par
     res.runtime_hash = h
     for sym in symbols:
         sym.pop("c")
+        sym.pop("key", None)
     res.symbols = symbols
+
+
+def _saved_value_key(project_id: str, block_id: str, block_type: str, port: str, type_name: str, literal: str) -> int:
+    """Key of a saved value (see "saved values" in runtime/plcrt.h).
+
+    The project id keeps values saved by one program from applying to another one;
+    the block type and id, the input and its type tie the value to its input; and the
+    input's value in the project makes a saved value stop applying once that value is
+    changed in the diagram and uploaded again.
+    """
+    h = hashlib.sha1(f"{project_id}/{block_id}/{block_type}.{port}:{type_name}={literal}".encode()).digest()
+    return int.from_bytes(h[:4], "little") or 1
 
 
 # ====================================================================== Modelica export

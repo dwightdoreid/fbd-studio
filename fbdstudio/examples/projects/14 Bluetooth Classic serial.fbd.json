@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-qimbfk",
   "name": "14 Bluetooth Classic serial",
   "description": "Bluetooth Classic serial (SPP) for Android phones and PCs (not iPhone: use the BLE example). Counts button presses and sends the count; sending reset=1 sets the counter back to 0.",
   "board": "esp32dev",

@@ -46,7 +46,9 @@ programming and aimed at students, hobbyists and small industrial users.
   pre-trigger, for signals too fast for the monitor. Zoom, hover values and
   CSV export. The plotted signals are saved with the project.
 - **Build & upload** through PlatformIO, then **monitor online** over USB
-  serial. You can change setpoints and timer presets while the board runs.
+  serial. You can change setpoints and timer presets while the board runs,
+  and **save them on the board** so they survive a reset (see
+  [Saving values on the controller](#saving-values-on-the-controller)).
 - **Readable code:** export the generated PlatformIO project and continue in
   C++ if you need to.
 - **Modelica export:** test the program against a model of the machine or
@@ -158,6 +160,50 @@ average, even if one is late, so the sample rate seen by the capture and the
 DSP blocks is exact. On an ESP32 at a 5 ms cycle, 2000 captured scans were
 all exactly 5 ms apart, with online monitoring running.
 
+## Saving values on the controller
+
+Values you change online (setpoints, timer presets, PID gains: any
+unconnected input) are lost when the controller restarts, unless you save them.
+
+- **Save values** (toolbar, while online) stores the current value of every
+  unconnected input in the controller's flash memory (NVS on the ESP32).
+  After every restart or power cut, the controller uses these values instead
+  of the ones in the project. A ● on the button means you changed values
+  since the last save.
+- **Clear saved** deletes them. The values running now stay until the next
+  reset; after that the project's values apply again.
+- The status bar shows, when you connect, how many saved values the controller
+  started with.
+
+Saved values belong to the program and the inputs they came from. Every
+project has an id made of its creation time and a random part (e.g.
+`20261117-143205-k3x9q2`). A saved value is only used by a program with the
+same project id, and only while its input still has the same block type and
+the same value in the project. So:
+
+- **A completely different program** never uses them. Uploading it does
+  not erase them either: upload the original program again and they apply
+  again.
+- **A new version of the same program:** if you change an input's value in
+  the diagram and upload again, the new project value applies, because it is
+  the newer decision. Other edits (new blocks, other wires, changed values
+  elsewhere) keep the saved values of the inputs they don't touch.
+- **Saving the project under another name** makes a copy with a new id.
+  This includes saving an example into your workspace. Values saved by the
+  original don't apply to the copy.
+- Saved values are erased only by **Clear saved** or by erasing the whole
+  flash (e.g. PlatformIO's *Erase Flash*). The next **Save values** replaces
+  them, and values left over from other programs are dropped then.
+
+To keep tuned values for good, also enter them in the diagram. Then the project
+and the controller agree, and a new board gets them too.
+
+Saving pauses the scan cycle briefly: a few milliseconds, up to about 100 ms on
+an ESP32 while the flash is busy. So save while the process can tolerate a short
+pause, not in the middle of a fast motion. The simulator keeps saved values
+per project in the workspace (`.sim-values/`), so you can try all of this
+without hardware.
+
 ## Testing with a plant model (Modelica)
 
 **Export… → Modelica package** turns the diagram into a Modelica package with a
@@ -215,7 +261,7 @@ diagram (JSON) ─► compiler.py ─► main.cpp + plcrt.h ─┬─► Platfor
 | `fbdstudio/library/blocks/*.yaml` | built-in block definitions |
 | `fbdstudio/library/boards/*.yaml` | board definitions (pins and capabilities) |
 | `fbdstudio/compiler.py` | validation, execution order, C++ generation |
-| `fbdstudio/runtime/plcrt.h` | device runtime: scan timing, monitor protocol |
+| `fbdstudio/runtime/plcrt.h` | device runtime: scan timing, monitor protocol, saved values |
 | `fbdstudio/runtime/sim/` | Arduino API emulation for the simulator |
 | `fbdstudio/modelica.py`, `fbdstudio/runtime/model/` | Modelica export (package, library, Arduino shim with simulated time) |
 | `fbdstudio/server.py` | FastAPI REST + WebSocket server |

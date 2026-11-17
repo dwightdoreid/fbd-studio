@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "id": "20261117-141114-ex77tq",
   "name": "20 State feedback - motor position",
   "description": "LQR state feedback positions a simulated DC motor: speed is a first-order lag of the voltage (PT1, 0.5 s), position is the integral of speed (INTEG). STATE_FB computes u = KR*R - K1*position - K2*speed with LQR gains.",
   "board": "esp32dev",
